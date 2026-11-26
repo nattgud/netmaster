@@ -404,6 +404,8 @@ body.wizard-open { overflow: hidden; }
 .panel.folded .fold::before { transform: rotate(-45deg); margin-bottom: 0; }
 .update-box { padding: 8px 0 10px; margin-bottom: 8px; border-bottom: 1px solid var(--border); display: grid; gap: 6px; }
 .update-box .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ev-more{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;padding:10px 4px 2px}
+.ev-more[hidden]{display:none}
 .ov-update{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 12px;padding:10px 14px;border:1px solid var(--accent);border-radius:10px;background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .ov-update[hidden]{display:none}
 .ov-update button{margin-left:auto}

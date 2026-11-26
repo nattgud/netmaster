@@ -738,17 +738,48 @@ function eventHtml(e) {
     ${e.detail ? `<span class="detail">${esc(e.detail)}</span>` : ''}
   </li>`;
 }
+// The Events tab shows EV_STEP events; "Show more" adds more and fetches older ones from the server when needed.
+const EV_STEP = 20;
+state.evShown = EV_STEP;
 function renderEvents() {
-  const list = state.events.filter((e) => !state.evFilter || e.category === state.evFilter);
+  const all = state.events.filter((e) => !state.evFilter || e.category === state.evFilter);
+  const list = all.slice(0, state.evShown);
   $('#events').innerHTML = list.map(eventHtml).join('') || '<li><span class="none">No events</span></li>';
+  const more = all.length > list.length || !state.evEnd;
+  const box = $('#ev-more');
+  box.hidden = !list.length || !more && state.evShown <= EV_STEP;
+  box.innerHTML = `<span class="muted">Showing ${list.length}</span>
+    ${more ? `<button type="button" class="link" data-ev-more="${EV_STEP}">Show ${EV_STEP} more</button>
+      <button type="button" class="link" data-ev-more="100">Show 100 more</button>` : ''}
+    ${state.evShown > EV_STEP ? `<button type="button" class="link" data-ev-more="0">Show fewer</button>` : ''}`;
   const recent = state.events.filter((e) => e.severity !== 'info' || e.category !== 'system').slice(0, 8);
   $('#recent-events').innerHTML = recent.map(eventHtml).join('') || '<li><span class="none">Nothing to report</span></li>';
 }
 $$('#ev-filter button').forEach((b) => b.addEventListener('click', () => {
   $$('#ev-filter button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   state.evFilter = b.dataset.cat;
+  state.evShown = EV_STEP;
   renderEvents();
 }));
+$('#ev-more').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-ev-more]');
+  if (!b) return;
+  const n = Number(b.dataset.evMore);
+  if (!n) { state.evShown = EV_STEP; renderEvents(); return; }
+  state.evShown += n;
+  b.disabled = true;
+  // fetch older events until there are enough of the chosen category, or there are no more
+  const have = () => state.events.filter((x) => !state.evFilter || x.category === state.evFilter).length;
+  try {
+    while (!state.evEnd && have() < state.evShown) {
+      const last = state.events.at(-1);
+      const older = await api(`/api/events?limit=200${last ? `&before_id=${last.id}` : ''}`);
+      state.events.push(...older);
+      if (older.length < 200) state.evEnd = true;
+    }
+  } catch (err) { console.warn(err); }
+  renderEvents();
+});
 
 // ---------- routerloggar ----------
 async function loadLogs() {
@@ -1651,7 +1682,7 @@ function connect() {
       loadSpeed();
     } else if (type === 'event') {
       state.events.unshift(data);
-      state.events.length = Math.min(state.events.length, 500);
+      state.events.length = Math.min(state.events.length, Math.max(500, state.evShown + 200));
       renderEvents();
       notify(data);
     } else if (type === 'device') {
@@ -1668,7 +1699,11 @@ function connect() {
   };
 }
 async function loadEvents() {
-  try { state.events = await api('/api/events?limit=300'); renderEvents(); } catch (e) { console.warn(e); }
+  try {
+    state.events = await api('/api/events?limit=300');
+    state.evEnd = state.events.length < 300;
+    renderEvents();
+  } catch (e) { console.warn(e); }
 }
 
 // ---------- login ----------
