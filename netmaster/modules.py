@@ -71,12 +71,16 @@ def validate_meta(meta: dict) -> dict:
     meta.setdefault("requires", [])
     meta.setdefault("files", ["module.py"])
     meta.setdefault("settings", [])
+    meta.setdefault("actions", [])
     for f in meta["files"]:
         if not FILE_RX.match(str(f)):
             raise ValueError(f"Invalid file name in module.json: {f}")
     for s in meta["settings"]:
         if not s.get("key") or s.get("type", "text") not in TYPES:
             raise ValueError(f"Invalid setting in module.json: {s}")
+    for a in meta["actions"]:
+        if not isinstance(a, dict) or not ID_RX.match(str(a.get("id", ""))) or not a.get("label"):
+            raise ValueError(f"Invalid action in module.json: {a}")
     return meta
 
 
@@ -325,8 +329,27 @@ class ModuleManager:
                 "settings": [s | {"value": "" if s.get("type") == "password" else values.get(s["key"], s.get("default")),
                                   "is_set": bool(secrets.get(s["key"])) if s.get("type") == "password" else None}
                              for s in meta["settings"]],
+                "actions": [a | {"options": self._options(mid, a["id"])} for a in meta.get("actions", [])]
+                if mid in inst else [],
             })
         return out
+
+    def _options(self, mid: str, aid: str) -> list[dict] | None:
+        inst = self.instances.get(mid)
+        try:
+            return inst.action_options(aid) if inst else None
+        except Exception as e:
+            log.warning("Module %s action options: %s", mid, e)
+            return None
+
+    async def run_action(self, mid: str, aid: str, value: str | None) -> str:
+        """Runs a module's button. The module must be running."""
+        inst = self.instances.get(mid)
+        if not inst:
+            raise ValueError("Turn the module on first")
+        if aid not in {a["id"] for a in inst.meta.get("actions", [])}:
+            raise ValueError("Unknown action")
+        return str(await inst.action(aid, value) or "Done")
 
     def install(self, mid: str, progress=lambda pct, step: None) -> dict:
         """Downloads a module from the marketplace and installs its requirements. Blocking: run in a thread.

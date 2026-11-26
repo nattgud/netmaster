@@ -264,3 +264,14 @@ class ModuleBase:
 
     def stop(self) -> None:
         """Called when the module is disabled or NetMaster stops. Close connections here if needed."""
+
+    # Buttons in the module's card. Declare them in module.json:
+    #   "actions": [{"id": "test", "label": "Send a test", "help": "optional"}]
+    def action_options(self, action_id: str) -> list[dict] | None:
+        """Optional choices shown as a list next to the button: [{"value": ..., "label": ...}]."""
+        return None
+
+    async def action(self, action_id: str, value: str | None = None) -> str:
+        """Runs when the button is pressed (value = the chosen option). Return a short message for the user;
+        raise an exception to show an error."""
+        raise ValueError("This module has no such action")

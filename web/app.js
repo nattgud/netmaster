@@ -1199,8 +1199,11 @@ function modHtml(m) {
   const tags = [...m.provides, ...(m.requires.length ? [`needs ${m.requires.join(', ')}`] : [])].map((t) => `<span class="tag">${esc(t)}</span>`).join('');
   const head = `<div class="mod-head"><b>${esc(m.name)}</b> <span class="muted small">${esc(m.installed_version || m.available_version || '')}${m.author ? ` · ${esc(m.author)}` : ''}</span>
     ${m.installed_version ? `<input type="checkbox" class="switch" title="On/off" data-mod-toggle="${esc(m.id)}" ${m.enabled ? 'checked' : ''}>` : ''}</div>`;
+  const acts = m.installed_version && m.enabled && m.actions?.length ? `<div class="mod-acts">${m.actions.map((a) => `<div class="mod-act" data-mod-act="${esc(m.id)}" data-act-id="${esc(a.id)}">
+      ${a.options?.length ? `<select aria-label="${esc(a.label)}">${a.options.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}</select>` : ''}
+      <button type="button" class="ghost small">${esc(a.label)}</button>${a.help ? `<div class="muted small">${esc(a.help)}</div>` : ''}<div class="small" data-act-msg></div></div>`).join('')}</div>` : '';
   const body = m.installed_version
-    ? `<details class="mod-cfg"${state.modOpen === m.id ? ' open' : ''}><summary class="small">Settings</summary><form data-mod-form="${esc(m.id)}">${m.settings.map((s) => modSettingInput(m, s)).join('')}
+    ? `${acts}<details class="mod-cfg"${state.modOpen === m.id ? ' open' : ''}><summary class="small">Settings</summary><form data-mod-form="${esc(m.id)}">${m.settings.map((s) => modSettingInput(m, s)).join('')}
         <div class="cfg-actions"><button type="submit">Save</button>${m.update && !busy ? `<button type="button" class="ghost" data-mod-install="${esc(m.id)}">Update to ${esc(m.available_version)}</button>` : ''}
         <button type="button" class="ghost danger-text" data-mod-remove="${esc(m.id)}">Uninstall</button></div></form></details>`
     : busy ? '' : `<button class="ghost" data-mod-install="${esc(m.id)}">Install</button>`;
@@ -1256,6 +1259,19 @@ document.addEventListener('click', async (e) => {
   state.modOpen = id;
   try { await api(`/api/modules/${id}/install`, 'POST'); } catch (err) { alert(err.message); }
   pollJobs();
+});
+// Module buttons ("actions" in module.json)
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('.mod-act button');
+  if (!b || !$('#mod-panel').contains(b)) return;
+  const box = b.closest('.mod-act'), msg = box.querySelector('[data-act-msg]');
+  b.disabled = true;
+  msg.className = 'small muted'; msg.textContent = 'Working…';
+  try {
+    const r = await api(`/api/modules/${box.dataset.modAct}/action/${box.dataset.actId}`, 'POST', { value: box.querySelector('select')?.value ?? null });
+    msg.className = 'small ok-text'; msg.textContent = r.message;
+  } catch (err) { msg.className = 'small danger-text'; msg.textContent = err.message; }
+  b.disabled = false;
 });
 document.addEventListener('change', async (e) => {
   const t = e.target.closest('[data-mod-toggle]');
@@ -1840,3 +1856,25 @@ window.addEventListener('hashchange', procFromHash);
 procFromHash();
 // Remember whether the domain list is expanded, so it does not collapse when the list is redrawn.
 document.addEventListener('toggle', (e) => { if (e.target.classList?.contains('dns-box')) state.dnsOpen = e.target.open; }, true);
+
+// ---------- folding settings panels (remembered on this device) ----------
+const FOLD_KEY = 'nm-open-panels';
+function openPanels() { try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')); } catch { return new Set(); } }
+function setFold(panel, open, save = true) {
+  panel.classList.toggle('folded', !open);
+  panel.querySelector('.fold')?.setAttribute('aria-expanded', String(open));
+  if (!save) return;
+  const o = openPanels();
+  if (open) o.add(panel.dataset.fold); else o.delete(panel.dataset.fold);
+  try { localStorage.setItem(FOLD_KEY, JSON.stringify([...o])); } catch { /* storage blocked */ }
+}
+{
+  const o = openPanels();
+  document.querySelectorAll('.panel[data-fold]').forEach((p) => setFold(p, o.has(p.dataset.fold), false));
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('.panel[data-fold] > .panel-head');
+  if (!b || e.target.closest('a, input, select') || (e.target.closest('button') && !e.target.closest('.fold'))) return;
+  const p = b.parentElement;
+  setFold(p, p.classList.contains('folded'));
+});

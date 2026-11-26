@@ -49,6 +49,7 @@ KINDS = {
     "router_remote_mgmt": "Router remote management turned on",
     "router_portfwd": "Port opened on the router",
     "other": "Other security alert",
+    "test": "Test alert (sent with the Send test alert button)",
 }
 ONLINE_S = 600          # same limit as "online" in NetMaster
 TOP_EVERY_S = 300       # top sites change slowly
@@ -372,11 +373,53 @@ class Module(ModuleBase):
         kind = ev.get("kind") or "other"
         if kind not in KINDS:
             kind = "other"
-        payload = self._describe(ev, kind)
+        payload = self._describe(ev, kind) | {"test": False}
         self._pub(f"{self.pre}/security/alert", payload, retain=False, force=True)
         self._pub(f"{self.pre}/security/{kind}", payload, retain=False, force=True)
         self._pub(f"{self.pre}/security/last", payload, force=True)  # retained: the sensor keeps it after restarts
         self.alerts += 1
+
+    # ---------- test button ----------
+    def action_options(self, action_id: str) -> list[dict] | None:
+        if action_id != "test_alert":
+            return None
+        return [{"value": "test", "label": "Test alert (event type: test)"}] + [
+            {"value": k, "label": f"{v} (event type: {k})"} for k, v in KINDS.items() if k != "test"]
+
+    async def action(self, action_id: str, value: str | None = None) -> str:
+        if action_id != "test_alert":
+            raise ValueError("Unknown action")
+        if not self.connected:
+            raise RuntimeError(self.last_error or f"Not connected to the broker {self.host}:{self.port}")
+        kind = value if value in KINDS else "test"
+        self._test_alert(kind)
+        return f"Sent a test alert with event type \"{kind}\". Look at Security alert / Last security alert in Home Assistant."
+
+    def _test_alert(self, kind: str) -> None:
+        """A made-up alert with realistic content, about the NetMaster computer (or any known device)."""
+        devs = self.ctx.devices()
+        local = self.ctx.local_ip
+        mac = next((m for m, d in devs.items() if local and d.get("ip") == local), None) or next(iter(devs), None)
+        d = devs.get(mac) or {}
+        name, ip = self._name(mac, d) if mac else "Example device", d.get("ip") or "192.0.2.10"
+        samples = {
+            "new_open_port": (f"New open port on {name}: 8080 (HTTP-alt)", f"{ip} now accepts connections on port 8080."),
+            "new_device": ("New device on the network", f"IP {ip} · MAC {mac or '02:00:00:00:00:01'}"),
+            "new_server_program": ("New program on the server is using the internet: example.exe",
+                                   "C:\\Example\\example.exe\nTalking to 203.0.113.10. Not validly signed (NotSigned)."),
+            "internet_exposed_port": ("New port visible from the internet", "203.0.113.1: 8080"),
+            "risky_services": ("Risky services found in the network", f"{name}: 23 (Telnet)\n{name}: 445 (SMB)"),
+            "mac_flapping": (f"{ip} keeps changing MAC address",
+                             "Latest 02:00:00:00:00:01 → 02:00:00:00:00:02. May be an IP conflict or ARP spoofing."),
+            "heavy_upload": (f"Heavy upload from {name}", f"{name} has uploaded over 40 Mbit/s for 30 minutes."),
+        }
+        title, detail = samples.get(kind, (KINDS[kind], "This is a test alert from NetMaster. Nothing has happened."))
+        ev = {"title": title, "detail": detail, "source": mac or "", "severity": "warning", "ts": time.time(), "id": None}
+        p = self._describe(ev, kind)
+        p |= {"test": True, "title": "TEST: " + p["title"], "message": "TEST: " + p["message"]}
+        self._pub(f"{self.pre}/security/alert", p, retain=False, force=True)
+        self._pub(f"{self.pre}/security/{kind}", p, retain=False, force=True)
+        self._pub(f"{self.pre}/security/last", p, force=True)
 
     # ---------- main loop ----------
     async def run(self) -> None:

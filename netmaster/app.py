@@ -611,6 +611,16 @@ async def module_uninstall(request: Request, mid: str):
     return {"ok": True}
 
 
+@app.post("/api/modules/{mid}/action/{aid}")
+async def module_action(request: Request, mid: str, aid: str, body: dict = Body(default={})):
+    """Presses a module's button (declared under "actions" in its module.json)."""
+    try:
+        msg = await request.app.state.modules.run_action(mid, aid, (body or {}).get("value"))
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return {"message": msg}
+
+
 @app.put("/api/modules/{mid}")
 async def module_configure(request: Request, mid: str, body: dict = Body(...)):
     try:

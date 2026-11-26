@@ -1,12 +1,15 @@
 {
   "id": "ha_mqtt",
   "name": "Home Assistant (MQTT)",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "NetMaster",
   "description": "Sends security alerts (with a fixed type per alert for automations, plus the device, IP, MAC and details such as the port or program), the number of unknown devices, and the devices you pick (presence, IP, MAC, top sites and an Internet pause switch) to Home Assistant through your MQTT broker. Home Assistant finds everything by itself (MQTT discovery).",
   "provides": ["smart_home"],
   "requires": ["paho-mqtt>=2.0"],
   "files": ["module.py"],
+  "actions": [
+    {"id": "test_alert", "label": "Send test alert", "help": "Sends a made-up alert to Home Assistant, marked test: true and \"TEST:\" in the title. Pick a type to try an automation for it."}
+  ],
   "settings": [
     {"key": "host", "label": "MQTT broker address", "type": "text", "default": "", "help": "The IP or name of your broker, for example the Home Assistant computer when you use the Mosquitto add-on."},
     {"key": "port", "label": "Port", "type": "number", "default": 1883, "help": "1883, or usually 8883 with TLS."},

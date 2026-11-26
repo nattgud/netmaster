@@ -66,6 +66,8 @@ class Module(ModuleBase):
 
 Blocking work (HTTP, sockets, libraries without async) goes through `await self.ctx.to_thread(fn, ...)`. If `run()` crashes, NetMaster restarts it after a while.
 
+**Buttons (NetMaster 0.2.1+).** List them under `"actions"` in module.json, e.g. `[{"id": "test", "label": "Send a test", "help": "optional"}]`. They show in the module's card while it is on. Pressing one calls `async def action(self, action_id, value)`; return a short message, or raise to show an error. To show a list of choices next to the button, return `[{"value": ..., "label": ...}]` from `action_options(self, action_id)`.
+
 **Never log the user out.** Many routers allow one admin at a time. If the device says someone else is logged in, raise `Busy` instead of forcing your way in.
 
 ### What `self.ctx` gives you

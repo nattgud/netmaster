@@ -391,3 +391,14 @@ body.wizard-open { overflow: hidden; }
 .mute-dlg h3 { margin: 0 0 4px; }
 .mute-dlg .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 .ev-mute.is-muted { opacity: .55; }
+.mod-acts { margin: 8px 0; }
+.mod-act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+.mod-act select { max-width: 100%; }
+.mod-act > div { flex-basis: 100%; }
+.panel[data-fold] > .panel-head { cursor: pointer; }
+.panel.folded > :not(.panel-head) { display: none; }
+.panel.folded > .panel-head { margin-bottom: 0; }
+.fold { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.fold::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s; margin: 0 2px 3px; }
+.panel.folded .fold::before { transform: rotate(-45deg); margin-bottom: 0; }
