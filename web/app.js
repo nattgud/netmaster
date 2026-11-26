@@ -1413,8 +1413,8 @@ function muteReason(e) {
 function muteMark(e) {
   const why = muteReason(e);
   return why
-    ? ` <button class="link ev-mute is-muted" data-unmute-ev="${e.id}" title="No notifications: ${esc(why.text)}. Tap to turn on again." aria-label="Notifications off. Turn on again">🔕</button>`
-    : ` <button class="link ev-mute" data-mute-ev="${e.id}" title="Stop notifications like this…" aria-label="Stop notifications like this">🔕</button>`;
+    ? ` <button class="link ev-mute is-muted" data-unmute-ev="${e.id}" title="No notifications: ${esc(why.text)}. Tap to turn on again." aria-label="Notifications off. Turn on again">🔕 <span>Muted</span></button>`
+    : ` <button class="link ev-mute" data-mute-ev="${e.id}" title="Notifications on. Tap to stop notifications like this…" aria-label="Stop notifications like this">🔔</button>`;
 }
 async function renderNotifPrefs() {
   const el = $('#notif-prefs');

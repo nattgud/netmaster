@@ -390,7 +390,11 @@ body.wizard-open { overflow: hidden; }
 .mute-dlg::backdrop { background: rgb(0 0 0 / 45%); }
 .mute-dlg h3 { margin: 0 0 4px; }
 .mute-dlg .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
-.ev-mute.is-muted { opacity: .55; }
+.ev-mute:not(.is-muted) { opacity: .35; filter: grayscale(1); }
+.ev-mute:not(.is-muted):hover { opacity: 1; filter: none; }
+.ev-mute.is-muted { opacity: 1; display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; border-radius: 999px;
+  border: 1px solid var(--warn, #d9a441); color: var(--warn, #d9a441); background: color-mix(in srgb, var(--warn, #d9a441) 14%, transparent);
+  text-decoration: none; font-weight: 600; }
 .mod-acts { margin: 8px 0; }
 .mod-act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
 .mod-act select { max-width: 100%; }
