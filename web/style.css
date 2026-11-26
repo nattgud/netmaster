@@ -347,8 +347,12 @@ li.clickable { cursor: pointer; }
 .switch:checked::after { left: 21px; }
 
 /* modules and general settings */
-.mods { display: grid; gap: 10px; }
-.mod { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; min-width: 0; }
+/* minmax(0, 1fr): the cards follow the panel's width instead of growing to fit their widest content */
+.mods { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+.mod { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; min-width: 0;
+  grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; }
+.panel .mono { overflow-wrap: anywhere; }
+.mod input, .mod select, .mod textarea { max-width: 100%; min-width: 0; box-sizing: border-box; }
 .mod-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mod-head .switch { margin-left: auto; }
 .mod-cfg summary, .cfg-sec summary { cursor: pointer; }
