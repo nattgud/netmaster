@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
     s.calls = CallQuality(net, events, s.modules.load_mbps, db)
     s.ports = PortScanner(cfg, db, events, inventory)
     s.exposure = Exposure(cfg, db, events, s.modules)
-    s.speed = SpeedTest(cfg, db, events, hub)
+    s.speed = SpeedTest(cfg, db, events, hub, s.modules)
     s.services = Services(cfg, events)
     from .hostflows import HostFlows
     from .geo import Geo

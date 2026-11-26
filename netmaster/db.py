@@ -102,6 +102,12 @@ class Database:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(SCHEMA)
+        # Speed tests: what the test itself got, and what other devices used at the same time
+        for col in ("test_down_mbps", "test_up_mbps", "others_down_mbps", "others_up_mbps"):
+            try:
+                self._conn.execute(f"ALTER TABLE speedtests ADD COLUMN {col} REAL")
+            except sqlite3.OperationalError:
+                pass
         # Older databases lack these columns: watch (presence alerts), share (shown in smart-home modules)
         for col in ("watch", "share"):
             try:

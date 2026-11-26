@@ -219,15 +219,22 @@ class Exposure:
 
 # ---------------------------------------------------------------- hastighetstest
 class SpeedTest:
-    """Short test against Cloudflare: max ~1.5 s and 15 MB down, 1 s and 5 MB up, so the network is not disturbed."""
+    """Short test against Cloudflare: max ~1.5 s and 15 MB down, 1 s and 5 MB up, so the network is not disturbed.
+
+    The test only gets what is left over, so what the other devices used at the same time (from the router
+    module's traffic numbers, read just before the test) is added: down_mbps/up_mbps are the whole connection.
+    test_*_mbps is what the test itself measured, others_*_mbps the other devices (None without a router module).
+    """
 
     HOST = "speed.cloudflare.com"
     DOWN_S, DOWN_MAX = 1.5, 25_000_000
     UP_S, UP_MAX = 1.0, 5_000_000
     WARMUP_S = 0.25  # TCP slow start is not counted
 
-    def __init__(self, cfg, db, events, hub):
-        self.cfg, self.db, self.events, self.hub = cfg, db, events, hub
+    TRAFFIC_MAX_AGE_S = 180  # older router numbers say nothing about right now
+
+    def __init__(self, cfg, db, events, hub, modules=None):
+        self.cfg, self.db, self.events, self.hub, self.modules = cfg, db, events, hub, modules
         self.last: dict | None = (db.query("SELECT * FROM speedtests ORDER BY ts DESC LIMIT 1") or [None])[0]
         self.error: str | None = None
         self._slow = 0
@@ -295,7 +302,17 @@ class SpeedTest:
         finally:
             c.close()
 
+    def _others(self) -> tuple[float, float] | None:
+        """Mbit/s (down, up) that all devices on the network used, per the router. None if unknown."""
+        m = self.modules
+        if not m or not m.traffic or not m.traffic_ts or time.time() - m.traffic_ts > self.TRAFFIC_MAX_AGE_S:
+            return None
+        down = sum(float(t.get("down") or 0) for t in m.traffic.values())
+        up = sum(float(t.get("up") or 0) for t in m.traffic.values())
+        return down * 8 / 1e6, up * 8 / 1e6
+
     async def test(self) -> None:
+        others = self._others()  # before the test, so the test's own traffic is not counted
         try:
             ping = await asyncio.to_thread(self._ping)
             down = await asyncio.to_thread(self._down)
@@ -305,9 +322,14 @@ class SpeedTest:
             return
         self.error = None
         ts = time.time()
-        self.db.execute("INSERT INTO speedtests(ts, down_mbps, up_mbps, ping_ms) VALUES (?,?,?,?)",
-                        [(ts, round(down, 1), round(up, 1), round(ping, 1))])
-        self.last = {"ts": ts, "down_mbps": round(down, 1), "up_mbps": round(up, 1), "ping_ms": round(ping, 1)}
+        od, ou = (round(others[0], 1), round(others[1], 1)) if others else (None, None)
+        row = {"ts": ts, "down_mbps": round(down + (od or 0), 1), "up_mbps": round(up + (ou or 0), 1),
+               "ping_ms": round(ping, 1), "test_down_mbps": round(down, 1), "test_up_mbps": round(up, 1),
+               "others_down_mbps": od, "others_up_mbps": ou}
+        self.db.execute(f"INSERT INTO speedtests({', '.join(row)}) VALUES ({', '.join('?' * len(row))})",
+                        [tuple(row.values())])
+        self.last = row
+        down = row["down_mbps"]
         self.hub.publish("speedtest", self.last)
         self._judge(down)
 
@@ -323,7 +345,8 @@ class SpeedTest:
                              f"{down:.0f} Mbit/s down, normally about {med:.0f} Mbit/s.", "netmaster")
 
     def history(self, hours: float) -> list[dict]:
-        return self.db.query("SELECT ts, down_mbps, up_mbps, ping_ms FROM speedtests WHERE ts >= ? ORDER BY ts",
+        return self.db.query("SELECT ts, down_mbps, up_mbps, ping_ms, test_down_mbps, test_up_mbps, others_down_mbps, "
+                             "others_up_mbps FROM speedtests WHERE ts >= ? ORDER BY ts",
                              (time.time() - hours * 3600,))
 
     async def run(self) -> None:

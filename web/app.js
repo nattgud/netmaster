@@ -293,6 +293,7 @@ function renderSpeed() {
     </div>
     ${spark([{ name: 'Download', cls: 's-down', pts: h.map((r) => [r.ts, r.down_mbps]) }, { name: 'Upload', cls: 's-up', pts: h.map((r) => [r.ts, r.up_mbps]) }],
       (v) => `${fmtMbit(v)} Mbit/s`, 'measured internet speed, last 24 h')}
+    ${last?.others_down_mbps != null ? `<div class="muted small">Includes what other devices used during the test: ${fmtMbit(last.others_down_mbps)} down · ${fmtMbit(last.others_up_mbps)} up Mbit/s (the test itself got ${fmtMbit(last.test_down_mbps)} · ${fmtMbit(last.test_up_mbps)}).</div>` : ''}
     <div class="muted small">${st?.error ? `Last test failed: ${esc(st.error)}`
       : last ? `Quick test every ${st?.interval_min} min · last ${fmtAgo(last.ts)} ago · graph: 24 h` : 'First test runs shortly.'}</div>`;
 }
