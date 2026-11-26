@@ -33,7 +33,7 @@
     {
       "id": "jellyfin",
       "name": "Jellyfin",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "NetMaster",
       "description": "Alerts when your Jellyfin media server stops answering, and shows who is streaming right now (useful when the network feels slow).",
       "provides": [
@@ -41,8 +41,8 @@
       ],
       "requires": [],
       "sha256": {
-        "module.json": "186c648f59f66bc2fdcb981bb0580f959f836f725f843b8c0159552e08b4c82a",
-        "module.py": "051bfe2dc203015fd294219b7770c78c5b3dfacf148310f75ddb130ec07a491f"
+        "module.json": "8df9ed61ad89afb01ea4ce87f9baaf08b53f5ce6905a72edfe183414b8c061c2",
+        "module.py": "59b366c8d966eb99ad4f8f535882619e9113db1201aecf3115594009a9114e96"
       }
     },
     {

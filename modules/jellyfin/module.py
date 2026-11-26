@@ -21,9 +21,12 @@ class Module(ModuleBase):
         return st, body
 
     def _sessions(self) -> None:
-        st, body = http_get(f"{self.url}/Sessions?activeWithinSeconds=120", {"X-Emby-Token": self.settings["api_key"]})
-        if st == 401:
-            raise RuntimeError("The API key was refused")
+        # Jellyfin 10.11+ only accepts the key in the Authorization header (X-Emby-Token is turned off by default).
+        key = self.settings["api_key"].strip()
+        st, body = http_get(f"{self.url}/Sessions?activeWithinSeconds=120",
+                            {"Authorization": f'MediaBrowser Token="{key}"', "X-Emby-Token": key})
+        if st in (401, 403):
+            raise RuntimeError(f"The API key was refused (HTTP {st}). Create a new key under Dashboard → API keys.")
         if st == 200:
             self.streams = [{"user": s.get("UserName"), "device": s.get("DeviceName"), "client": s.get("RemoteEndPoint"),
                              "title": (s.get("NowPlayingItem") or {}).get("Name"),

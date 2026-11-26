@@ -1,7 +1,7 @@
 {
   "id": "jellyfin",
   "name": "Jellyfin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "NetMaster",
   "description": "Alerts when your Jellyfin media server stops answering, and shows who is streaming right now (useful when the network feels slow).",
   "provides": ["service"],
