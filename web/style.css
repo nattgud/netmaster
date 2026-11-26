@@ -402,3 +402,8 @@ body.wizard-open { overflow: hidden; }
 .fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .fold::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s; margin: 0 2px 3px; }
 .panel.folded .fold::before { transform: rotate(-45deg); margin-bottom: 0; }
+.update-box { padding: 8px 0 10px; margin-bottom: 8px; border-bottom: 1px solid var(--border); display: grid; gap: 6px; }
+.update-box .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.update-notes { white-space: pre-wrap; font: inherit; margin: 6px 0 0; max-height: 240px; overflow: auto; }
+.update-chip { background: var(--accent); color: var(--bg); }
+.tabs button.has-update::after { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 5px; vertical-align: middle; }

@@ -149,9 +149,13 @@
     </section>
 
     <section id="tab-settings" class="tab" hidden>
-      <div class="panel folded" data-fold="modules">
-        <div class="panel-head"><h2><button type="button" class="fold" aria-expanded="false">Modules</button></h2><span class="muted small">support for your routers and services</span></div>
-        <div id="mod-home"><div id="mod-panel" class="mods"></div></div>
+      <div class="panel folded" data-fold="general">
+        <div class="panel-head"><h2><button type="button" class="fold" aria-expanded="false">General</button></h2><span id="update-chip" class="tag update-chip" hidden>Update available</span></div>
+        <div id="update-box" class="update-box"></div><div id="cfg-panel"></div>
+      </div>
+      <div class="panel folded" data-fold="account">
+        <div class="panel-head"><h2><button type="button" class="fold" aria-expanded="false">Account</button></h2></div>
+        <div id="account-panel"></div>
       </div>
       <div class="panel folded" data-fold="push">
         <div class="panel-head"><h2><button type="button" class="fold" aria-expanded="false">Notifications</button></h2></div>
@@ -161,17 +165,13 @@
         <div class="panel-head"><h2><button type="button" class="fold" aria-expanded="false">What to notify about</button></h2><span class="muted small">same for all your phones and computers</span></div>
         <div id="notif-prefs"></div>
       </div>
+      <div class="panel folded" data-fold="modules">
+        <div class="panel-head"><h2><button type="button" class="fold" aria-expanded="false">Modules</button></h2><span class="muted small">support for your routers and services</span></div>
+        <div id="mod-home"><div id="mod-panel" class="mods"></div></div>
+      </div>
       <div class="panel folded" data-fold="adg">
         <div class="panel-head"><h2><button type="button" class="fold" aria-expanded="false">DNS filter rules</button></h2><span class="muted small">your own block/allow rules · add more from a device's Contacts list</span></div>
         <div id="adg-rules"></div>
-      </div>
-      <div class="panel folded" data-fold="general">
-        <div class="panel-head"><h2><button type="button" class="fold" aria-expanded="false">General</button></h2></div>
-        <div id="cfg-panel"></div>
-      </div>
-      <div class="panel folded" data-fold="account">
-        <div class="panel-head"><h2><button type="button" class="fold" aria-expanded="false">Account</button></h2></div>
-        <div id="account-panel"></div>
       </div>
     </section>
 

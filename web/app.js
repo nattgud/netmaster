@@ -1643,6 +1643,7 @@ function connect() {
       const first = !state.status;
       renderStatus(data);
       updateModStatus();
+      renderUpdate(data.update);
       if (first && state.pendingProc) { openProcOnMap(state.pendingProc.name, state.pendingProc.ip); state.pendingProc = null; }
       if (first) { loadChart(); loadSpeed(); loadCalls(); loadDevices().then(() => { renderTop(); loadUsage(); }); }
       if (trafficChanged && state.devices?.size) renderDevices();
@@ -1878,3 +1879,38 @@ document.addEventListener('click', (e) => {
   const p = b.parentElement;
   setFold(p, p.classList.contains('folded'));
 });
+
+// ---------- NetMaster updates (Settings → General) ----------
+function renderUpdate(u) {
+  if (!u) return;
+  state.update = u;
+  const box = $('#update-box'), chip = $('#update-chip'), tab = $('.tabs button[data-tab="settings"]');
+  chip.hidden = !u.available;
+  tab?.classList.toggle('has-update', !!u.available);
+  let html;
+  if (u.updating) {
+    html = `<div><b>Updating to ${esc(u.updating)}…</b></div><div class="muted small">NetMaster restarts in a minute or two. This page reloads by itself.</div>`;
+  } else if (u.available) {
+    html = `<div><b>NetMaster ${esc(u.latest)} is available</b> <span class="muted small">(you have ${esc(u.current)})</span></div>
+      ${u.notes ? `<details class="small"><summary>What's new</summary><pre class="update-notes">${esc(u.notes)}</pre></details>` : ''}
+      <div class="row">${u.can_update ? '<button type="button" id="update-go">Update now</button>' : ''}
+        ${u.url ? `<a class="small" href="${esc(u.url)}" target="_blank" rel="noopener">Release on GitHub</a>` : ''}</div>
+      ${u.why_not ? `<div class="muted small">${esc(u.why_not)}</div>` : ''}`;
+  } else {
+    html = `<div>NetMaster ${esc(u.current)} · <span class="muted small">${u.latest ? 'up to date' : 'no release found yet'}${u.checked ? ` · checked ${fmtAgo(u.checked)} ago` : ''}</span>
+      <button type="button" class="link small" id="update-check">Check now</button></div>`;
+  }
+  if (u.error && !u.updating) html += `<div class="small warn-text">${esc(u.error)}</div>`;
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+document.addEventListener('click', async (e) => {
+  if (e.target.id === 'update-check') {
+    e.target.disabled = true; e.target.textContent = 'Checking…';
+    try { renderUpdate(await api('/api/update?check=1')); } catch (err) { alert(err.message); }
+  } else if (e.target.id === 'update-go') {
+    if (!confirm(`Update NetMaster to ${state.update.latest}?\n\nNetMaster stops for a minute or two while it updates. Your settings and data are kept.`)) return;
+    e.target.disabled = true; e.target.textContent = 'Starting…';
+    try { renderUpdate(await api('/api/update', 'POST')); } catch (err) { alert(err.message); e.target.disabled = false; e.target.textContent = 'Update now'; }
+  }
+});
+api('/api/update').then(renderUpdate).catch(() => {});

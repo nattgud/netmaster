@@ -97,6 +97,8 @@ async def lifespan(app: FastAPI):
     s.geo = Geo(db)
     s.hostflows = HostFlows(db, events, l2, s.geo, lambda: s.modules.public_ip)
     # The frontend's version: changes when any web file changes, so open apps reload themselves.
+    from .updater import Updater
+    s.updater = Updater(events, cfg.db_path.parent)
     s.build = hashlib.sha1("".join(f"{p}{p.stat().st_mtime_ns}" for p in sorted(WEB_DIR.rglob("*"))
                                    if p.is_file()).encode()).hexdigest()[:12]
 
@@ -111,7 +113,7 @@ async def lifespan(app: FastAPI):
         net.run(), dnsm.run(), freeze.run(), _prune_loop(cfg, db), _status_loop(app),
         inventory.run_poll(), inventory.run_sweep(), dhcp.run(), dnsguard.run(), refresh_oui(),
         s.ports.run(), s.exposure.run(), s.speed.run(), s.services.run(), s.hostflows.run(),
-        s.calls.run(), inventory.run_presence(),
+        s.calls.run(), inventory.run_presence(), s.updater.run(),
     )]
     s.modules.start_all()
     sniffer.start()
@@ -139,7 +141,7 @@ def _status(app: FastAPI) -> dict:
             "inventory": s.inventory.status(), "dhcp": s.dhcp.status(), "dns": s.dnsguard.status(),
         },
         "push": s.push.status(),
-        "services": s.services.status() + s.modules.services(), "speedtest": s.speed.status(),
+        "services": s.services.status() + s.modules.services(), "speedtest": s.speed.status(), "update": s.updater.status(),
         "ports": s.ports.status(), "exposure": s.exposure.status(), "host_flows": s.hostflows.status(),
     }
 
@@ -583,6 +585,22 @@ async def setup_tailscale(request: Request):
 def setup_done(request: Request):
     request.app.state.db.set_meta("setup_done", str(time.time()))
     return {"ok": True}
+
+
+# --- NetMaster updates ---
+@app.get("/api/update")
+async def update_status(request: Request, check: bool = False):
+    u = request.app.state.updater
+    return await u.check() if check else u.status()
+
+
+@app.post("/api/update")
+async def update_start(request: Request):
+    try:
+        await asyncio.to_thread(request.app.state.updater.start)
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return request.app.state.updater.status()
 
 
 # --- modules ---
