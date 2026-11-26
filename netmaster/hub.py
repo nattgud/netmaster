@@ -45,6 +45,8 @@ class EventService:
         eid = self.db.insert_event(ts, category, severity, title, detail, source)
         ev = {"id": eid, "ts": ts, "category": category, "severity": severity,
               "title": title, "detail": detail, "source": source, "kind": kind}
+        from .push import classify
+        ev["ntype"] = classify(ev)  # notification type, so the UI can show and offer the right mute levels
         self.hub.publish("event", ev)
         for listener in self.listeners:
             try:

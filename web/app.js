@@ -734,9 +734,7 @@ function eventHtml(e) {
   return `<li class="${e.severity}${prog ? ' clickable' : ''}"${prog ? ` data-proc="${esc(prog)}" data-ip="${esc(ip)}" title="Show on map"` : ''}>
     <span class="dot"></span>
     <span class="title">${esc(e.title)}<span class="tag">${CAT_LABEL[e.category] || esc(e.category)}</span>${prog ? '<span class="tag">Map →</span>' : ''}</span>
-    <span class="meta">${fmtTime(e.ts)}${e.severity !== 'info' ? (state.notif?.muted?.includes(typeKey(e.title))
-      ? ' <span class="muted" title="You don\'t get notifications for this type (change under Settings)">🔕</span>'
-      : ` <button class="link ev-mute" data-mute-ev="${esc(e.title)}" title="Stop notifications like this" aria-label="Stop notifications like this">🔕</button>`) : ''}</span>
+    <span class="meta">${fmtTime(e.ts)}${e.severity !== 'info' ? muteMark(e) : ''}</span>
     ${e.detail ? `<span class="detail">${esc(e.detail)}</span>` : ''}
   </li>`;
 }
@@ -823,8 +821,10 @@ setInterval(() => { if (!$('#tab-devices').hidden) loadDnsTop(); }, 300000);
 async function loadDevices() {
   try {
     const list = await api('/api/devices');
+    const first = !state.devices?.size;
     state.devices = new Map(list.map((d) => [d.mac, d]));
     renderDevices();
+    if (first) renderEvents();  // device names in the 🔕 texts
     loadDnsTop();
   } catch (e) { console.warn(e); }
 }
@@ -1330,6 +1330,45 @@ document.addEventListener('submit', async (e) => {
 
 // ---------- which notifications you get ----------
 const typeKey = (t) => t.replace(/\d+(?:[.,]\d+)?(?:\s*(?:ms|s|min|h|d|%|Mbit\/s|kbit\/s))?/g, '#').replace(/#(?:\s+#)+/g, '#').trim();
+const IPV4 = /^\d+\.\d+\.\d+\.\d+$/, MAC = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/;
+// The device an event is about (its MAC when known), or '' when the event is not about one device.
+function evDevice(e) {
+  const src = (e.source || '').toLowerCase();
+  if (MAC.test(src)) return src;
+  if (!IPV4.test(src)) return '';
+  for (const d of state.devices?.values() || []) if (d.ip === src) return d.mac;
+  return src;
+}
+const evIds = (e) => { const d = evDevice(e), x = state.devices?.get(d); return new Set([d, (e.source || '').toLowerCase(), x?.ip].filter(Boolean)); };
+const typeInfo = (id) => state.notif?.types?.find((t) => t.id === id);
+const devLabel = (id) => (MAC.test(id) ? devName(id) : id);
+const shortTitle = (k) => k.replace(/#/g, '…');
+function ruleText(r) {
+  const t = r.type && (typeInfo(r.type)?.label || r.type), d = r.device && devLabel(r.device);
+  if (r.title) return `Only "${shortTitle(r.title)}"${d ? ` from ${d}` : ''}`;
+  if (t && d) return `"${t}" from ${d}`;
+  if (d) return `Everything from ${d}`;
+  return t ? `"${t}" from every device` : '?';
+}
+// Why an event gives no notification: a matching mute rule, or its whole type turned off. null = it does notify.
+function muteRules(e) {
+  const key = typeKey(e.title);
+  let ids = null;
+  return (state.notif?.muted || []).filter((r) => (!r.title || r.title === key) && (!r.type || r.type === e.ntype)
+    && (!r.device || (ids ||= evIds(e)).has(r.device)));
+}
+function muteReason(e) {
+  if (!state.notif) return null;
+  if (e.ntype && typeInfo(e.ntype)?.on === false) return { off: e.ntype, text: `"${typeInfo(e.ntype).label}" is turned off` };
+  const rules = muteRules(e);
+  return rules.length ? { rules, text: ruleText(rules[0]) } : null;  // turning on again removes all matching rules
+}
+function muteMark(e) {
+  const why = muteReason(e);
+  return why
+    ? ` <button class="link ev-mute is-muted" data-unmute-ev="${e.id}" title="No notifications: ${esc(why.text)}. Tap to turn on again." aria-label="Notifications off. Turn on again">🔕</button>`
+    : ` <button class="link ev-mute" data-mute-ev="${e.id}" title="Stop notifications like this…" aria-label="Stop notifications like this">🔕</button>`;
+}
 async function renderNotifPrefs() {
   const el = $('#notif-prefs');
   try { state.notif = await api('/api/push/prefs'); } catch (err) { el.innerHTML = `<div class="danger-text small">${esc(err.message)}</div>`; return; }
@@ -1340,34 +1379,79 @@ async function renderNotifPrefs() {
       <li><label class="switch-row"><span><b>${esc(t.label)}</b><span class="muted small">${esc(t.desc)}</span>
         <span class="muted small">${seen(t)}${t.example ? ` · e.g. "${esc(t.example)}"` : ''}</span></span>
         <input type="checkbox" class="switch" data-type="${t.id}" ${t.on ? 'checked' : ''} aria-label="${esc(t.label)}"></label></li>`).join('')}</ul>`).join('')}
-    <h3 class="notif-h">Muted single notifications</h3>
-    <div class="muted small">Muted with 🔕 on an event, e.g. only one access point's freezes while the rest stay on.</div>
-    <ul class="notif-types">${p.muted.map((k) => `<li><span>${esc(k.replace(/#/g, '…'))}</span><button class="ghost small" data-unmute="${esc(k)}">Turn on again</button></li>`).join('')
+    <h3 class="notif-h">Muted with 🔕</h3>
+    <div class="muted small">Tap 🔕 on an event to choose what to mute: just that one, that kind on one device, or everything from a device.</div>
+    <ul class="notif-types">${p.muted.map((r, i) => `<li><span>${esc(ruleText(r))}</span><button class="ghost small" data-unmute="${i}">Turn on again</button></li>`).join('')
       || '<li class="muted small">None.</li>'}</ul>`;
 }
 $('#notif-prefs').addEventListener('change', async (e) => {
   const c = e.target.closest('input[data-type]');
   if (!c) return;
   try { await api('/api/push/prefs', 'PUT', { types: { [c.dataset.type]: c.checked } }); } catch (err) { alert(err.message); c.checked = !c.checked; }
-});
-$('#notif-prefs').addEventListener('click', async (e) => {
-  const b = e.target.closest('[data-unmute]');
-  if (!b) return;
-  try { await api('/api/push/prefs', 'PUT', { muted: state.notif.muted.filter((k) => k !== b.dataset.unmute) }); } catch (err) { alert(err.message); }
-  renderNotifPrefs();
+  if (state.notif) typeInfo(c.dataset.type).on = c.checked;
   renderEvents();
 });
-// Turn off notifications straight from an event
-async function muteFromEvent(title) {
-  if (!confirm(`Stop notifications like this?\n\n"${title}"\n\nIt is still logged under Events. You can turn it back on under Settings.`)) return;
-  try { state.notif = { ...(state.notif || {}), ...(await api('/api/push/mute', 'POST', { title })) }; } catch (err) { alert(err.message); return; }
+async function setMute(rule, mute) {
+  try { state.notif = { ...(state.notif || {}), muted: (await api('/api/push/mute', 'POST', { rule, mute })).muted }; } catch (err) { alert(err.message); return false; }
   renderEvents();
+  if ($('#notif-prefs').childElementCount) renderNotifPrefs();
+  return true;
 }
-['#events', '#recent-events'].forEach((id) => $(id).addEventListener('click', (e) => {
-  const b = e.target.closest('[data-mute-ev]');
+$('#notif-prefs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-unmute]');
+  if (b) setMute(state.notif.muted[+b.dataset.unmute], false);
+});
+// The choices when muting from an event, from narrow to wide. Only the levels that make sense for this event are shown.
+function muteChoices(e) {
+  const dev = evDevice(e), t = e.ntype && e.ntype !== 'other' && e.ntype !== 'system' ? typeInfo(e.ntype) : null;
+  const dn = dev && devLabel(dev), key = typeKey(e.title), out = [];
+  out.push({ rule: { title: key }, label: 'Only this one', sub: `"${shortTitle(key)}"${key.includes('#') ? ' (whatever the number)' : ''}` });
+  if (t && dev) out.push({ rule: { type: t.id, device: dev }, label: `All "${t.label}" from ${dn}`, sub: `Other kinds from ${dn}, and this kind from other devices, still notify.` });
+  if (dev) out.push({ rule: { device: dev }, label: `Everything from ${dn}`, sub: 'All kinds of notifications about this device.' });
+  if (t) out.push({ off: t.id, label: `All "${t.label}" from every device`, sub: 'Turns off this whole kind (same switch as under Settings → Notifications).' });
+  return out;
+}
+function muteDialog(e) {
+  const ch = muteChoices(e);
+  const dlg = document.createElement('dialog');
+  dlg.className = 'mute-dlg';
+  dlg.innerHTML = `<form method="dialog"><h3>Stop notifications</h3><div class="muted small">${esc(e.title)}</div>
+    ${ch.map((c, i) => `<label class="wiz-opt"><input type="radio" name="lvl" value="${i}" ${i ? '' : 'checked'}><span><b>${esc(c.label)}</b><br><span class="muted small">${esc(c.sub)}</span></span></label>`).join('')}
+    <div class="muted small">It is still logged under Events. Turn it on again with 🔕 on the event or under Settings → Notifications.</div>
+    <div class="row"><button value="ok">Mute</button> <button value="cancel" class="ghost" formnovalidate>Cancel</button></div></form>`;
+  document.body.append(dlg);
+  dlg.addEventListener('close', async () => {
+    const c = dlg.returnValue === 'ok' && ch[+dlg.querySelector('input[name=lvl]:checked').value];
+    dlg.remove();
+    if (!c) return;
+    if (c.off) {
+      try { await api('/api/push/prefs', 'PUT', { types: { [c.off]: false } }); typeInfo(c.off).on = false; } catch (err) { alert(err.message); return; }
+      renderEvents();
+      if ($('#notif-prefs').childElementCount) renderNotifPrefs();
+    } else setMute(c.rule, true);
+  });
+  dlg.showModal();
+}
+async function unmuteFromEvent(e) {
+  const why = muteReason(e);
+  if (!why || !confirm(`Turn notifications on again?\n\nMuted: ${why.text}`)) return;
+  if (why.rules) {
+    try { state.notif.muted = (await api('/api/push/prefs', 'PUT', { muted: state.notif.muted.filter((r) => !why.rules.includes(r)) })).muted; } catch (err) { alert(err.message); return; }
+    renderEvents();
+    if ($('#notif-prefs').childElementCount) renderNotifPrefs();
+    return;
+  }
+  try { await api('/api/push/prefs', 'PUT', { types: { [why.off]: true } }); typeInfo(why.off).on = true; } catch (err) { alert(err.message); return; }
+  renderEvents();
+  if ($('#notif-prefs').childElementCount) renderNotifPrefs();
+}
+['#events', '#recent-events'].forEach((id) => $(id).addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-mute-ev],[data-unmute-ev]');
   if (!b) return;
-  e.stopPropagation();
-  muteFromEvent(b.dataset.muteEv);
+  ev.stopPropagation();
+  const e = state.events.find((x) => String(x.id) === (b.dataset.muteEv || b.dataset.unmuteEv));
+  if (!e) return;
+  if (b.dataset.muteEv) muteDialog(e); else unmuteFromEvent(e);
 }, true));
 api('/api/push/prefs').then((p) => { state.notif = p; renderEvents(); }).catch(() => {});
 

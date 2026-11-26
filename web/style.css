@@ -386,3 +386,8 @@ body.wizard-open { overflow: hidden; }
 .wiz-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--border); border-radius: 10px; margin: 8px 0; cursor: pointer; }
 .wiz-ts { padding: 10px; border: 1px dashed var(--border); border-radius: 10px; margin: 8px 0; }
 .wiz-nav { margin-top: 16px; }
+.mute-dlg { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); padding: 16px; width: min(480px, calc(100vw - 32px)); }
+.mute-dlg::backdrop { background: rgb(0 0 0 / 45%); }
+.mute-dlg h3 { margin: 0 0 4px; }
+.mute-dlg .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.ev-mute.is-muted { opacity: .55; }

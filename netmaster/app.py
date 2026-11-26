@@ -161,7 +161,8 @@ def status(request: Request):
 @app.get("/api/events")
 def events(request: Request, limit: int = Query(200, le=1000), category: str | None = None,
            before_id: int | None = None):
-    return request.app.state.db.events(limit, category, before_id)
+    from .push import classify
+    return [r | {"ntype": classify(r)} for r in request.app.state.db.events(limit, category, before_id)]
 
 
 @app.get("/api/samples")
@@ -478,11 +479,13 @@ def push_set_prefs(request: Request, body: dict = Body(...)):
 
 @app.post("/api/push/mute")
 def push_mute(request: Request, body: dict = Body(...)):
-    """Turn off (or on) notifications of the same type as a given event."""
-    from .push import type_key
+    """Add (mute: true) or remove a mute rule: {title?, type?, device?}. A plain {"title"} mutes just that kind of title."""
+    from .push import _rules
     push = request.app.state.push
-    key, muted = type_key(str(body.get("title", ""))), push.prefs()["muted"]
-    muted = [m for m in muted if m != key] + ([key] if body.get("mute", True) else [])
+    rule = _rules([body.get("rule") or {"title": str(body.get("title", ""))}])
+    if not rule:
+        raise HTTPException(400, "Empty mute rule")
+    muted = [m for m in push.prefs()["muted"] if m != rule[0]] + (rule if body.get("mute", True) else [])
     return push.set_prefs(muted=muted)
 
 

@@ -80,6 +80,22 @@ def type_key(title: str) -> str:
 MAX_PER_10MIN = 20
 
 
+def _rules(items: list) -> list[dict]:
+    """Mute rules. Every field in a rule must match: title (type_key of the title), type (notification type id),
+    device (MAC or IP). Older versions stored plain titles; those become {"title": ...}."""
+    out: list[dict] = []
+    for it in items:
+        r = {"title": it} if isinstance(it, str) else dict(it) if isinstance(it, dict) else {}
+        r = {k: str(v).strip() for k, v in r.items() if k in ("title", "type", "device") and str(v or "").strip()}
+        if "title" in r:
+            r["title"] = type_key(r["title"])
+        if "device" in r:
+            r["device"] = r["device"].lower()
+        if r and r not in out:
+            out.append(r)
+    return out
+
+
 class Push:
     def __init__(self, cfg, db):
         self.cfg, self.db = cfg, db
@@ -118,7 +134,7 @@ class Push:
         except ValueError:
             p = {}
         on = {t["id"]: t["default"] for t in NOTIF_TYPES} | {k: bool(v) for k, v in (p.get("types") or {}).items()}
-        return {"types": on, "muted": list(p.get("muted") or [])}
+        return {"types": on, "muted": _rules(p.get("muted") or [])}
 
     def set_prefs(self, types: dict | None = None, muted: list | None = None) -> dict:
         p = self.prefs()
@@ -126,15 +142,42 @@ class Push:
             ids = {t["id"] for t in NOTIF_TYPES}
             p["types"] |= {k: bool(v) for k, v in types.items() if k in ids}
         if muted is not None:
-            p["muted"] = sorted({type_key(str(m)) for m in muted if str(m).strip()})
+            p["muted"] = _rules(muted)
         self.db.set_meta("push_prefs", json.dumps(p))
         return p
+
+    def _ids(self, source: str) -> set[str]:
+        """The event's source plus the same device's other address (MAC <-> IP), so a rule on a device always matches."""
+        src = (source or "").strip().lower()
+        ids = {src}
+        for d in self.db.devices():
+            mac, ip = (d.get("mac") or "").lower(), (d.get("ip") or "").lower()
+            if src and src in (mac, ip):
+                ids |= {mac, ip}
+        return ids - {""}
+
+    def muted_by(self, ev: dict) -> dict | None:
+        """The first mute rule that matches the event, or None."""
+        rules = self.prefs()["muted"]
+        if not rules:
+            return None
+        key, kind, ids = type_key(ev["title"]), classify(ev), None
+        for r in rules:
+            if "title" in r and r["title"] != key:
+                continue
+            if "type" in r and r["type"] != kind:
+                continue
+            if "device" in r:
+                ids = self._ids(ev.get("source", "")) if ids is None else ids
+                if r["device"] not in ids:
+                    continue
+            return r
+        return None
 
     def wanted(self, ev: dict) -> bool:
         if ev["severity"] == "info":  # information only, never a notification
             return False
-        p = self.prefs()
-        return p["types"].get(classify(ev), True) and type_key(ev["title"]) not in p["muted"]
+        return self.prefs()["types"].get(classify(ev), True) and self.muted_by(ev) is None
 
     def catalog(self, days: int = 30) -> list[dict]:
         """All notification types with on/off and how often they have occurred."""
