@@ -18,7 +18,7 @@
     {
       "id": "ha_mqtt",
       "name": "Home Assistant (MQTT)",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "NetMaster",
       "description": "Sends security alerts (with a fixed type per alert, ready for automations), the number of unknown devices, and the devices you pick (presence, IP, MAC, top sites and an Internet pause switch) to Home Assistant through your MQTT broker. Home Assistant finds everything by itself (MQTT discovery).",
       "provides": [
@@ -28,8 +28,8 @@
         "paho-mqtt>=2.0"
       ],
       "sha256": {
-        "module.json": "2b79daecb02d79a3f5d3abffd83d3727df27df14ff339d5ae73ab1481949d2b1",
-        "module.py": "56133da7d09b5a1c3ce7b54547e3f152d5055d0e2489e6875cba55bc88a9d684"
+        "module.json": "57855ed36401e74f795c7fabbfb1c56f26d3a6df6fcf0f2165136f709e0170b1",
+        "module.py": "905d0809f92fd62735dd3202f4419381ea88d5661432975a1dd61351580a369e"
       }
     },
     {

@@ -71,6 +71,7 @@ class Module(ModuleBase):
         self.client = None
         self.loop: asyncio.AbstractEventLoop | None = None
         self.connected = False
+        self.refused: str | None = None
         self.resend = asyncio.Event()   # (re)connected or Home Assistant restarted: send everything again
         self.sent: dict[str, str] = {}  # topic -> last payload, so unchanged states are not resent
         self.shared: set[str] = set()   # MACs with entities in Home Assistant
@@ -98,8 +99,14 @@ class Module(ModuleBase):
     def _on_connect(self, client, userdata, flags, rc, props=None):
         if rc.is_failure:
             self.connected = False
-            self.last_error = f"The broker refused the connection: {rc}"
+            if str(rc) in ("Not authorized", "Bad user name or password"):
+                self.refused = ("The broker refused the username or password. Check them in the module settings "
+                                "(with the Mosquitto add-on: a Home Assistant user, or a login in the add-on's settings).")
+            else:
+                self.refused = f"The broker refused the connection: {rc}"
+            self.last_error = self.refused
             return
+        self.refused = None
         self.connected = True
         client.publish(f"{self.pre}/status", "online", qos=1, retain=True)
         client.subscribe([(f"{self.pre}/device/+/internet/set", 1), (f"{self.disc}/status", 1)])
@@ -107,7 +114,9 @@ class Module(ModuleBase):
 
     def _on_disconnect(self, client, userdata, flags, rc, props=None):
         self.connected = False
-        if rc.is_failure:
+        if self.refused:  # keep the real reason, not the "connection closed" that follows it
+            self.last_error = self.refused
+        elif rc.is_failure:
             self.last_error = f"Lost the connection to the broker ({rc}), reconnecting"
 
     def _on_message(self, client, userdata, msg):

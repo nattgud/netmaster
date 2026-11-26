@@ -1,7 +1,7 @@
 {
   "id": "ha_mqtt",
   "name": "Home Assistant (MQTT)",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "NetMaster",
   "description": "Sends security alerts (with a fixed type per alert, ready for automations), the number of unknown devices, and the devices you pick (presence, IP, MAC, top sites and an Internet pause switch) to Home Assistant through your MQTT broker. Home Assistant finds everything by itself (MQTT discovery).",
   "provides": ["smart_home"],

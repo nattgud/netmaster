@@ -1176,12 +1176,25 @@ function modJob(m) {
   if (j?.error) return `<div class="small danger-text">Installation failed: ${esc(j.error)}</div>`;
   return '';
 }
-function modHtml(m) {
+// A module's state line. Updated in place on every status message, so it is always current.
+function modStatus(m) {
   const live = (state.status?.modules || []).find((x) => x.id === m.id);
-  const busy = state.mods?.jobs?.[m.id]?.running;
-  const st = !m.installed_version ? '' : !m.enabled ? '<span class="muted">off</span>'
+  const enabled = live ? live.enabled : m.enabled;
+  return !m.installed_version ? '' : !enabled ? '<span class="muted">off</span>'
     : live?.last_error ? `<span class="danger-text">${esc(live.last_error)}</span>`
     : live?.last_ok ? `<span class="ok-text">working · ${fmtAgo(live.last_ok)} ago</span>` : '<span class="muted">starting…</span>';
+}
+function updateModStatus() {
+  for (const m of state.mods?.modules || []) {
+    const el = document.querySelector(`#mod-panel [data-mod-st="${m.id}"]`);
+    if (!el) continue;
+    const html = modStatus(m);
+    if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
+  }
+}
+function modHtml(m) {
+  const busy = state.mods?.jobs?.[m.id]?.running;
+  const st = modStatus(m);
   const tags = [...m.provides, ...(m.requires.length ? [`needs ${m.requires.join(', ')}`] : [])].map((t) => `<span class="tag">${esc(t)}</span>`).join('');
   const head = `<div class="mod-head"><b>${esc(m.name)}</b> <span class="muted small">${esc(m.installed_version || m.available_version || '')}${m.author ? ` · ${esc(m.author)}` : ''}</span>
     ${m.installed_version ? `<input type="checkbox" class="switch" title="On/off" data-mod-toggle="${esc(m.id)}" ${m.enabled ? 'checked' : ''}>` : ''}</div>`;
@@ -1190,7 +1203,7 @@ function modHtml(m) {
         <div class="cfg-actions"><button type="submit">Save</button>${m.update && !busy ? `<button type="button" class="ghost" data-mod-install="${esc(m.id)}">Update to ${esc(m.available_version)}</button>` : ''}
         <button type="button" class="ghost danger-text" data-mod-remove="${esc(m.id)}">Uninstall</button></div></form></details>`
     : busy ? '' : `<button class="ghost" data-mod-install="${esc(m.id)}">Install</button>`;
-  return `<div class="mod" data-mod="${esc(m.id)}">${head}<div class="muted small">${esc(m.description)}</div><div class="tags">${tags}</div><div class="small">${st}</div>${modJob(m)}${body}</div>`;
+  return `<div class="mod" data-mod="${esc(m.id)}">${head}<div class="muted small">${esc(m.description)}</div><div class="tags">${tags}</div><div class="small" data-mod-st="${esc(m.id)}">${st}</div>${modJob(m)}${body}</div>`;
 }
 async function renderModules(refresh = false) {
   const el = $('#mod-panel');
@@ -1528,6 +1541,7 @@ function connect() {
       const trafficChanged = data.router?.last_ok !== state.status?.router?.last_ok;
       const first = !state.status;
       renderStatus(data);
+      updateModStatus();
       if (first && state.pendingProc) { openProcOnMap(state.pendingProc.name, state.pendingProc.ip); state.pendingProc = null; }
       if (first) { loadChart(); loadSpeed(); loadCalls(); loadDevices().then(() => { renderTop(); loadUsage(); }); }
       if (trafficChanged && state.devices?.size) renderDevices();
