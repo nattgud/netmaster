@@ -2,7 +2,11 @@
 
 What shows up in Home Assistant:
   NetMaster (one device)
-    event.netmaster_security_alert   every security alert, with a fixed event_type (see KINDS)
+    event.netmaster_security_alert   every security alert, with a fixed event_type (see KINDS) and attributes:
+                                     message, title, detail, severity, device_name, ip, mac, vendor, host_name,
+                                     known_device, online, connection, ssid, ... plus port/service, program/path/
+                                     remote_ip etc. for the types that have them
+    sensor.netmaster_last_security_alert  the latest alert as readable text, with the same attributes
     sensor.netmaster_unknown_devices how many devices are not marked as known, with the list as an attribute
     device triggers                  one per alert type, for the automation editor ("NetMaster: ARP spoofing")
   Every device you pick in NetMaster ("Show in Home Assistant")
@@ -49,6 +53,7 @@ KINDS = {
 ONLINE_S = 600          # same limit as "online" in NetMaster
 TOP_EVERY_S = 300       # top sites change slowly
 MAC_RX = re.compile(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
+IP_RX = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
 
 
 def _iso(ts):
@@ -163,6 +168,10 @@ class Module(ModuleBase):
                         json_attributes_template="{{ {'devices': value_json.devices} | tojson }}",
                         state_class="measurement", unit_of_measurement="devices", icon="mdi:help-network")
         self._pub(f"{self.disc}/sensor/{n}/unknown_devices/config", un, force=True)
+        last = self._base(f"{n}_last_security_alert", "Last security alert", dev,
+                          state_topic=f"{self.pre}/security/last", value_template="{{ value_json.message[:255] }}",
+                          json_attributes_topic=f"{self.pre}/security/last", icon="mdi:shield-alert-outline")
+        self._pub(f"{self.disc}/sensor/{n}/last_security_alert/config", last, force=True)
         for kind, label in KINDS.items():
             self._pub(f"{self.disc}/device_automation/{n}/{kind}/config", {
                 "automation_type": "trigger", "topic": f"{self.pre}/security/{kind}",
@@ -301,25 +310,72 @@ class Module(ModuleBase):
         self._pub(topic, "OFF" if paused else "ON", force=True)
 
     # ---------- alerts ----------
+    def _subject(self, ev: dict) -> tuple[str | None, dict | None, str | None]:
+        """(MAC, device, IP) the alert is about, from its source (a MAC or an IP)."""
+        src = str(ev.get("source") or "").strip().lower()
+        if MAC_RX.match(src):
+            d = self.ctx.devices().get(src)
+            return src, d, (d or {}).get("ip")
+        if IP_RX.match(src):
+            m, _ = self.ctx.device_by_ip(src)
+            return (m, self.ctx.devices().get(m), src) if MAC_RX.match(m) else (None, None, src)
+        return None, None, None
+
+    def _describe(self, ev: dict, kind: str) -> dict:
+        """Everything about an alert: what happened, which device, and the parts that differ per type."""
+        mac, d, ip = self._subject(ev)
+        title, detail = ev.get("title") or "", ev.get("detail") or ""
+        name = self._name(mac, d) if d else None
+        p = {"event_type": kind, "type_name": KINDS[kind], "severity": ev.get("severity"), "title": title,
+             "detail": detail, "message": title, "time": _iso(ev.get("ts")), "source": ev.get("source"),
+             "netmaster_event_id": ev.get("id"),
+             "device_name": name, "ip": ip, "mac": mac, "vendor": None, "host_name": None, "known_device": None,
+             "randomized_mac": None, "online": None, "connection": None, "ssid": None, "signal": None,
+             "first_seen": None, "last_seen": None, "in_home_assistant": None}
+        if d:
+            p |= {"vendor": d.get("vendor"), "host_name": d.get("hostname"), "known_device": bool(d.get("trusted")),
+                  "randomized_mac": bool(d.get("randomized")),
+                  "online": time.time() - (d.get("last_seen") or 0) < ONLINE_S,
+                  "first_seen": _iso(d.get("first_seen")), "last_seen": _iso(d.get("last_seen")),
+                  "in_home_assistant": mac in self.shared}
+            t = self.ctx.traffic(mac) or {}
+            p |= {"connection": t.get("conn"), "ssid": t.get("ssid"), "signal": t.get("signal")}
+        # The parts that differ per type, as their own attributes so automations need no parsing.
+        if kind == "new_open_port" and (m := re.search(r": (\d+) \((.+)\)$", title)):
+            p |= {"port": int(m.group(1)), "service": m.group(2)}
+        elif kind == "internet_exposed_port" and (m := re.match(r"([\d.]+): ([\d, ]+)", detail)):
+            p |= {"public_ip": m.group(1), "ports": [int(x) for x in m.group(2).split(",") if x.strip()]}
+        elif kind == "new_server_program":
+            p["program"] = title.rsplit(": ", 1)[-1]
+            lines = detail.splitlines()
+            p["path"] = lines[0] if lines else None
+            if m := re.search(r"Talking to (\S+?)\.?(?:\s|$)", detail):
+                p["remote_ip"] = m.group(1)
+        elif kind == "mac_flapping" and (m := re.search(r"Latest (\S+) → (\S+?)\.", detail)):
+            p |= {"previous_mac": m.group(1), "new_mac": m.group(2)}
+        # One readable line for notifications: the title plus the device, unless the title already names it.
+        elif kind == "risky_services":
+            p["findings"] = [x.strip() for x in detail.splitlines() if x.strip()]
+        who = list(dict.fromkeys(x for x in (name, ip, mac) if x and x not in title))
+        first = detail.splitlines()[0].strip() if detail else ""
+        if who:
+            p["message"] = f"{title} ({', '.join(who)})"
+            if kind.startswith("router_") and first:  # the device is the router; the log line says what happened
+                p["message"] += f" – {first}"
+        elif kind == "risky_services" and p["findings"]:
+            p["message"] = f"{title}: {', '.join(p['findings'][:6])}{' …' if len(p['findings']) > 6 else ''}"
+        elif first and len(first) <= 120 and kind != "other":
+            p["message"] = f"{title} – {first}"
+        return p
+
     def _alert(self, ev: dict) -> None:
         kind = ev.get("kind") or "other"
         if kind not in KINDS:
             kind = "other"
-        src = str(ev.get("source") or "").lower()
-        devs = self.ctx.devices()
-        mac = src if MAC_RX.match(src) else None
-        if not mac and src:
-            m, _ = self.ctx.device_by_ip(src)
-            mac = m if MAC_RX.match(m) else None
-        d = devs.get(mac) if mac else None
-        payload = {"event_type": kind, "type_name": KINDS[kind], "severity": ev.get("severity"),
-                   "title": ev.get("title"), "detail": ev.get("detail"), "source": ev.get("source"),
-                   "ip": (d or {}).get("ip") or (src if src and not MAC_RX.match(src) else None),
-                   "mac": mac, "device_name": self._name(mac, d) if d else None,
-                   "vendor": (d or {}).get("vendor"), "known_device": bool(d.get("trusted")) if d else None,
-                   "netmaster_event_id": ev.get("id"), "time": _iso(ev.get("ts"))}
+        payload = self._describe(ev, kind)
         self._pub(f"{self.pre}/security/alert", payload, retain=False, force=True)
         self._pub(f"{self.pre}/security/{kind}", payload, retain=False, force=True)
+        self._pub(f"{self.pre}/security/last", payload, force=True)  # retained: the sensor keeps it after restarts
         self.alerts += 1
 
     # ---------- main loop ----------

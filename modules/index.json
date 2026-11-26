@@ -18,9 +18,9 @@
     {
       "id": "ha_mqtt",
       "name": "Home Assistant (MQTT)",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": "NetMaster",
-      "description": "Sends security alerts (with a fixed type per alert, ready for automations), the number of unknown devices, and the devices you pick (presence, IP, MAC, top sites and an Internet pause switch) to Home Assistant through your MQTT broker. Home Assistant finds everything by itself (MQTT discovery).",
+      "description": "Sends security alerts (with a fixed type per alert for automations, plus the device, IP, MAC and details such as the port or program), the number of unknown devices, and the devices you pick (presence, IP, MAC, top sites and an Internet pause switch) to Home Assistant through your MQTT broker. Home Assistant finds everything by itself (MQTT discovery).",
       "provides": [
         "smart_home"
       ],
@@ -28,14 +28,14 @@
         "paho-mqtt>=2.0"
       ],
       "sha256": {
-        "module.json": "57855ed36401e74f795c7fabbfb1c56f26d3a6df6fcf0f2165136f709e0170b1",
-        "module.py": "905d0809f92fd62735dd3202f4419381ea88d5661432975a1dd61351580a369e"
+        "module.json": "cb5bafaf3400a558661175e3138496ed068c4eb21caf8e6562c085d351f40844",
+        "module.py": "9e9e2107356fc2b56db27cb7a04f2c010da1be26e73163c1574514568c88578f"
       }
     },
     {
       "id": "home_assistant",
       "name": "Home Assistant",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "NetMaster",
       "description": "Alerts when Home Assistant stops answering, shows its version and pending updates, and makes sure its computer can never be paused (it often runs your DNS filter or smart home).",
       "provides": [
@@ -43,8 +43,8 @@
       ],
       "requires": [],
       "sha256": {
-        "module.json": "94836796e768bc2b2767170f9a975358c1f57ef3f0862180a02beb3a8a49b1a8",
-        "module.py": "6ae4fc8e0c00635364485f71cbc9a46e242a633a710fd1624c4527f3c9237580"
+        "module.json": "0541d95821eaf9285800129dd214d4f0509bacfc970305941012fc4c8c8d45eb",
+        "module.py": "617477a459330e6ce1153bb9dd2def95fa76cde9c7411c380e48684b7ff035d9"
       }
     },
     {

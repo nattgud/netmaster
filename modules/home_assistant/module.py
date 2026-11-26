@@ -14,19 +14,22 @@ class Module(ModuleBase):
         self.watch = ServiceWatch(ctx, "Home Assistant", self.url)
         self.version: str | None = None
         self.updates: list[str] = []
+        self.token_refused = False
 
     def _headers(self) -> dict:
         t = self.settings.get("token")
         return {"Authorization": f"Bearer {t}"} if t else {}
 
     def _probe(self):
-        # Without a token /api/ answers 401, which still proves Home Assistant is up.
-        return http_get(f"{self.url}/api/", self._headers(), verify_tls=False)
+        # A page that needs no login. Never /api/ without a valid token: Home Assistant logs every 401 as a
+        # failed login (and can ban the server's IP when ip_ban_enabled is on).
+        return http_get(f"{self.url}/manifest.json", verify_tls=False)
 
     def _details(self) -> None:
         st, body = http_get(f"{self.url}/api/config", self._headers(), verify_tls=False)
-        if st == 401:
-            raise RuntimeError("The access token was refused")
+        if st in (401, 403):
+            self.token_refused = True  # stop asking until the settings change, so it is not logged as attacks
+            raise RuntimeError("The access token was refused. Create a new one under your profile in Home Assistant → Security.")
         if st == 200:
             self.version = json.loads(body).get("version")
         st, body = http_get(f"{self.url}/api/states", self._headers(), timeout=20, verify_tls=False)
@@ -41,6 +44,8 @@ class Module(ModuleBase):
                 self.last_error = "Set the Home Assistant address in the module settings"
             elif await self.watch.check(self._probe):
                 try:
+                    if self.token_refused:
+                        raise RuntimeError("The access token was refused. Create a new one under your profile in Home Assistant → Security.")
                     if self.settings.get("token") and n % 20 == 0:  # details every ~10 minutes
                         before = set(self.updates)
                         await self.ctx.to_thread(self._details)
