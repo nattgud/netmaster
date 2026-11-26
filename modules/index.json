@@ -16,6 +16,21 @@
       }
     },
     {
+      "id": "certs",
+      "name": "Certificates and domains",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Warns before the TLS certificates on your web services (NAS, router, home server, websites) and your domain names expire. Works with self-signed certificates in the home network too. Domain dates come straight from the registry (RDAP or WHOIS), no account needed.",
+      "provides": [
+        "service"
+      ],
+      "requires": [],
+      "sha256": {
+        "module.json": "5d03dc9d5363d2fe984cc75fdd04427f8c33f7f9aaf7b4f034a2016d4f8868fa",
+        "module.py": "3a5ed1f8b802b3eed18ecc2f5d28056fcf09bfa512627926ef953f88162af551"
+      }
+    },
+    {
       "id": "ha_mqtt",
       "name": "Home Assistant (MQTT)",
       "version": "1.2.0",

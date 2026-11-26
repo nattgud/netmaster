@@ -95,6 +95,9 @@ Helpers in `netmaster.sdk`: `http_get(url, headers, timeout, verify_tls)` return
 - `dns`: a DNS filter. Implement `top(hours)` and `device(ip, hours)`, optionally `rules()`, `add_rule(...)`, `remove_rule(...)`.
 - `smart_home`: shares data with a smart-home system. Devices the user ticked "Show in ..." have `share` set in `ctx.devices()`. See [`ha_mqtt`](ha_mqtt/module.py).
 - `service`: return `{"service": self.watch.status()}` from `status()` to show up in the Services panel.
+  NetMaster 0.2.6+: return `{"services": [...]}` for several at once. Each may add `value` (short text for the card) and `detail` (the line under it). See [`certs`](certs/module.py).
+
+Any module can also list what it watches in its card in Settings: return `{"rows": [{"label": ..., "value": ..., "state": "up" | "degraded" | "down"}]}` from `status()` (NetMaster 0.2.6+, at most 50).
 
 Any module can also define `protect() -> {ip: reason}` for devices that must never be paused.
 

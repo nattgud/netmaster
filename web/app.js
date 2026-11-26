@@ -149,8 +149,16 @@ function renderStatus(s) {
   for (const sv of s.services || []) {
     cards.push({
       label: esc(sv.name), state: sv.state,
-      value: sv.state === 'up' ? 'Up' : sv.state === 'down' ? 'Down' : 'Checking…',
-      sub: sv.state === 'down' ? `${esc(sv.error || '')} · since ${fmtTime(sv.since)}` : sv.ms != null ? `${Math.round(sv.ms)} ms` : '',
+      value: sv.value ? esc(sv.value) : sv.state === 'up' ? 'Up' : sv.state === 'down' ? 'Down' : sv.state === 'degraded' ? 'Problem' : 'Checking…',
+      sub: sv.detail ? esc(sv.detail) : sv.state === 'down' ? `${esc(sv.error || '')} · since ${fmtTime(sv.since)}` : sv.ms != null ? `${Math.round(sv.ms)} ms` : '',
+    });
+  }
+  // Devices watched with ping or a TCP port (chosen in the device list)
+  for (const c of s.checks || []) {
+    cards.push({
+      label: esc(c.name), state: c.state === 'slow' ? 'degraded' : c.state, goto: 'devices',
+      value: c.state === 'up' ? 'Up' : c.state === 'slow' ? 'Slow' : c.state === 'down' ? 'Not responding' : 'Checking…',
+      sub: `${esc(c.service)}${c.port ? ` ${c.port}` : ''} · ${esc(c.ip || '')}${c.state === 'down' && c.since ? ` · since ${fmtTime(c.since)}` : c.median_ms != null ? ` · ${Math.round(c.median_ms)} ms` : ''}`,
     });
   }
   // Cards that only say OK become small chips; only problems get big cards.
@@ -570,6 +578,38 @@ function smartHome() {
   const m = (state.status?.modules || []).find((x) => x.enabled && x.provides.includes('smart_home'));
   return m ? (m.label || m.name) : '';
 }
+// ---------- uptime checks (ping or a TCP port) per device ----------
+const CHECK_STATE = { up: ['ok', '✓', 'Up'], slow: ['warn', '!', 'Slow'], down: ['bad', '✗', 'Not responding'], unknown: ['', '…', 'Checking…'] };
+const devChecks = (mac) => (state.status?.checks || []).filter((c) => c.mac === mac);
+const checkLabel = (c) => (c.port ? `${c.service || 'Port'} ${c.port}` : 'Ping');
+function checkBadges(mac) {
+  return devChecks(mac).map((c) => {
+    const [cls, mark, text] = CHECK_STATE[c.state] || CHECK_STATE.unknown;
+    return ` <span class="badge chk ${cls}" title="Uptime check: ${esc(checkLabel(c))} · ${text}">${esc(checkLabel(c))} ${mark}</span>`;
+  }).join('');
+}
+function checksHtml(d, ports) {
+  const list = devChecks(d.mac), have = new Set(list.map((c) => c.port));
+  const names = state.status?.ports?.names || {};
+  const opts = [[0, 'Ping'], ...(ports || []).map((p) => [p, `Port ${p}${names[p] ? ` (${names[p]})` : ''}`])].filter(([p]) => !have.has(p));
+  // keep what the user picked or typed when the list is redrawn by live updates
+  const dr = state.chkDraft?.mac === d.mac ? state.chkDraft : {};
+  const sel = dr.port ?? String(opts[0]?.[0] ?? 'other');
+  return `<div class="checks">
+    <div class="small"><b>Uptime check</b> <span class="muted">· alerts when it stops answering for about 1.5 min</span></div>
+    ${list.map((c) => {
+      const [cls, mark, text] = CHECK_STATE[c.state] || CHECK_STATE.unknown;
+      return `<div class="check-row"><span class="badge chk ${cls}">${esc(checkLabel(c))} ${mark}</span>
+        <span class="small muted"><span>${text}</span>${c.median_ms != null ? ` · ${Math.round(c.median_ms)} ms` : ''}${c.checked ? `<span> · checked ${fmtAgo(c.checked)} ago</span>` : ''}</span>
+        <button class="link small" data-act="chk-del" data-id="${esc(c.id)}">Stop watching</button></div>`;
+    }).join('')}
+    <div class="check-add">
+      <select data-chk-port aria-label="What to check">${opts.map(([p, l]) => `<option value="${p}"${String(p) === sel ? ' selected' : ''}>${esc(l)}</option>`).join('')}<option value="other"${sel === 'other' ? ' selected' : ''}>Other port…</option></select>
+      <input type="number" min="1" max="65535" placeholder="Port" data-chk-custom value="${esc(dr.custom || '')}" ${sel === 'other' ? '' : 'hidden'} aria-label="Port number">
+      <button class="ghost small" data-act="chk-add">Watch</button>
+    </div>
+  </div>`;
+}
 function histRow(d) {
   const h = state.hist?.[d.mac], pr = state.status?.ports, t = state.status?.router?.traffic?.[d.mac];
   const ports = pr?.open?.[d.mac];
@@ -583,6 +623,7 @@ function histRow(d) {
       : '<div class="muted small">Loading…</div>'}
     ${wifiHtml(state.wifiHist?.[d.mac])}
     ${dnsHtml(state.dnsHist?.[d.mac])}
+    ${checksHtml(d, ports)}
     <div class="hist-actions">
       <button class="ghost small" data-act="watch">${d.watch ? '🔔 Notifying when it comes/goes · turn off' : '🔔 Notify me when it comes online or goes offline'}</button>
       ${smartHome() ? `<button class="ghost small" data-act="share" title="Adds this device to ${esc(smartHome())} (presence, IP/MAC, top sites and an Internet switch)">${d.share ? `🏠 Shown in ${esc(smartHome())} · remove` : `🏠 Show in ${esc(smartHome())}`}</button>` : ''}
@@ -902,7 +943,7 @@ const shortIp = (ip) => {
 
 // Columns in the device table. Which ones show, and in what order, is saved in the browser.
 const DEV_COLS = [
-  { id: 'name', label: 'Name', fixed: true, cell: (d, c) => `<td class="name"><span class="nm${d.name ? '' : ' placeholder'} ${c.on ? 'is-on' : 'is-off'}" data-act="rename" title="Click to rename · ${c.on ? 'online' : 'offline'}">${esc(c.label)}</span>${state.status?.router?.blocked?.includes(d.mac) ? ' <span class="badge bad">Internet paused</span>' : ''}${d.watch ? ' <span class="badge" title="You get a notification when it comes online or goes offline">🔔</span>' : ''}${d.share && smartHome() ? ` <span class="badge" title="Shown in ${esc(smartHome())}">🏠</span>` : ''}${c.risky.length ? ` <span class="badge bad" title="Risky open ports">${c.risky.map((p) => esc(c.pr.names[p])).join(', ')}</span>` : ''}${c.sub ? `<span class="host">${esc(c.sub)}</span>` : ''}</td>` },
+  { id: 'name', label: 'Name', fixed: true, cell: (d, c) => `<td class="name"><span class="nm${d.name ? '' : ' placeholder'} ${c.on ? 'is-on' : 'is-off'}" data-act="rename" title="Click to rename · ${c.on ? 'online' : 'offline'}">${esc(c.label)}</span>${state.status?.router?.blocked?.includes(d.mac) ? ' <span class="badge bad">Internet paused</span>' : ''}${d.watch ? ' <span class="badge" title="You get a notification when it comes online or goes offline">🔔</span>' : ''}${checkBadges(d.mac)}${d.share && smartHome() ? ` <span class="badge" title="Shown in ${esc(smartHome())}">🏠</span>` : ''}${c.risky.length ? ` <span class="badge bad" title="Risky open ports">${c.risky.map((p) => esc(c.pr.names[p])).join(', ')}</span>` : ''}${c.sub ? `<span class="host">${esc(c.sub)}</span>` : ''}</td>` },
   { id: 'ip', label: 'IP', cell: (d, c) => `<td class="mono clickable ${c.on ? 'is-on' : 'is-off'}" data-act="investigate" title="${esc(d.ip)} · Investigate: find out what this device is">${esc(shortIp(d.ip))}</td>` },
   { id: 'vendor', label: 'Vendor', cell: (d) => `<td>${esc(d.vendor || '–')}</td>` },
   { id: 'mac', label: 'MAC', cell: (d) => `<td class="mono">${esc(d.mac)}</td>` },
@@ -976,6 +1017,7 @@ $('#dev-cols').addEventListener('change', (e) => {
 
 function renderDevices() {
   if (state.editing) return; // don't overwrite a name that is being edited
+  if (document.activeElement?.matches?.('[data-chk-custom], [data-chk-port]')) return; // nor a port being picked or typed
   const now = Date.now() / 1000;
   const q = $('#dev-search').value.trim().toLowerCase();
   const all = [...state.devices.values()];
@@ -1108,6 +1150,27 @@ $('#devices').addEventListener('click', async (e) => {
     renderDevices();
     return;
   }
+  if (act === 'chk-add') {
+    const box = btn.closest('.checks'), sel = box.querySelector('[data-chk-port]');
+    const port = sel.value === 'other' ? Number(box.querySelector('[data-chk-custom]').value) : Number(sel.value);
+    if (sel.value === 'other' && !(port >= 1 && port <= 65535)) { alert('Enter a port between 1 and 65535.'); return; }
+    btn.disabled = true;
+    try {
+      const c = await api('/api/checks', 'POST', { mac, port });
+      state.chkDraft = null;
+      state.status.checks = [...(state.status.checks || []).filter((x) => x.id !== c.id), c];
+    } catch (err) { alert(err.message); }
+    renderDevices();
+    return;
+  }
+  if (act === 'chk-del') {
+    try {
+      await api(`/api/checks/${encodeURIComponent(btn.dataset.id)}`, 'DELETE');
+      state.status.checks = (state.status.checks || []).filter((x) => x.id !== btn.dataset.id);
+    } catch (err) { alert(err.message); }
+    renderDevices();
+    return;
+  }
   if (act === 'wake') {
     try { await api(`/api/devices/${mac}/wake`, 'POST'); btn.textContent = 'Wake signal sent ✓'; } catch (err) { alert(err.message); }
     return;
@@ -1125,6 +1188,14 @@ $('#devices').addEventListener('click', async (e) => {
     renderDevices();
   } catch (err) { alert(`Failed: ${err.message}`); }
 });
+['change', 'input'].forEach((type) => $('#devices').addEventListener(type, (e) => {
+  const box = e.target.closest('.check-add');
+  if (!box) return;
+  const sel = box.querySelector('[data-chk-port]'), custom = box.querySelector('[data-chk-custom]');
+  state.chkDraft = { mac: e.target.closest('tr').dataset.mac, port: sel.value, custom: custom.value };
+  custom.hidden = sel.value !== 'other';
+  if (e.type === 'change' && e.target === sel && !custom.hidden) custom.focus();
+}));
 function startRename(el, mac) {
   const d = state.devices.get(mac);
   const input = document.createElement('input');
@@ -1212,9 +1283,13 @@ function modJob(m) {
 function modStatus(m) {
   const live = (state.status?.modules || []).find((x) => x.id === m.id);
   const enabled = live ? live.enabled : m.enabled;
-  return !m.installed_version ? '' : !enabled ? '<span class="muted">off</span>'
+  const line = !m.installed_version ? '' : !enabled ? '<span class="muted">off</span>'
     : live?.last_error ? `<span class="danger-text">${esc(live.last_error)}</span>`
     : live?.last_ok ? `<span class="ok-text">working · ${fmtAgo(live.last_ok)} ago</span>` : '<span class="muted">starting…</span>';
+  // modules can list what they watch (status() → rows)
+  const rows = enabled && live?.rows?.length ? `<ul class="mod-rows">${live.rows.map((r) => `<li class="${esc(r.state || '')}">
+    <span class="dot"></span><span class="mono">${esc(r.label)}</span><span class="muted">${String(r.value || '').split(' · ').map((x) => `<span>${esc(x)}</span>`).join(' · ')}</span></li>`).join('')}</ul>` : '';
+  return line + rows;
 }
 function updateModStatus() {
   for (const m of state.mods?.modules || []) {

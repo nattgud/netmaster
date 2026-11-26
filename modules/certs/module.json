@@ -1,0 +1,21 @@
+{
+  "id": "certs",
+  "name": "Certificates and domains",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Warns before the TLS certificates on your web services (NAS, router, home server, websites) and your domain names expire. Works with self-signed certificates in the home network too. Domain dates come straight from the registry (RDAP or WHOIS), no account needed.",
+  "provides": ["service"],
+  "requires": [],
+  "files": ["module.py"],
+  "settings": [
+    {"key": "hosts", "label": "Addresses to check", "type": "text", "default": "", "help": "Separate with commas or spaces. A name or IP, with :port when it is not 443. For example: nas.local:5001, 192.168.1.1, example.com"},
+    {"key": "include_services", "label": "Also check my monitored services", "type": "bool", "default": true, "help": "The https:// addresses in Services to monitor (Settings)."},
+    {"key": "domains", "label": "Domains to check", "type": "text", "default": "", "help": "Your domain names, for example example.com. Separate with commas or spaces."},
+    {"key": "warn_days", "label": "Warn this many days before", "type": "number", "default": 21},
+    {"key": "critical_days", "label": "Urgent this many days before", "type": "number", "default": 7},
+    {"key": "interval_h", "label": "Check every (hours)", "type": "number", "default": 6}
+  ],
+  "actions": [
+    {"id": "check", "label": "Check now", "help": "Checks every certificate and domain right away."}
+  ]
+}

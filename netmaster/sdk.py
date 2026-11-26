@@ -37,7 +37,9 @@ What a module can provide (module.json "provides"), and the methods/attributes t
                 system. Use subscribe_events(), traffic(), top_domains(), paused() and pause(mac, on).
 
 Any module may also return {"service": ServiceWatch(...).status()} from status() to show up in the
-Services panel, and protect() -> {ip: reason} for devices that must never be paused.
+Services panel ({"services": [...]} for several, each optionally with "value" and "detail" text),
+{"rows": [{"label", "value", "state": "up"|"degraded"|"down"}]} to list what it watches in its card,
+and protect() -> {ip: reason} for devices that must never be paused.
 
 Raise Busy when the device refuses because someone else is logged in. NetMaster then waits and
 never forces its way in (it must never log the user out of their router's web page).

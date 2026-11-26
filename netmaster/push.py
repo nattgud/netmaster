@@ -29,6 +29,9 @@ NOTIF_TYPES = [
        r"^Poor call quality"),
     _T("main_router", "Routers and access points", "Main router unreachable", "The server lost contact with the main router.",
        r"main router"),
+    _T("uptime", "Devices", "Watched device or port stops answering",
+       "A device or port you watch (Watch in the device list) stops answering, or answers again.",
+       r" stopped answering$| answers again$"),
     _T("gear_down", "Routers and access points", "Router or access point down or restarted",
        "Lost contact with an access point or other monitored device, or it restarted.",
        r"lost contact with|is not responding|restarted$|No DHCP server responded"),
@@ -59,18 +62,21 @@ NOTIF_TYPES = [
     _T("traffic", "Security", "Unusual traffic from a device", "Heavy upload, or activity at night.", r"^Heavy upload from| is active at night", False),
     _T("router_log", "Security", "Alerts from the router logs", "Failed logins, attacks, reboots and similar lines in the router logs.",
        "^(?:" + "|".join(re.escape(r.title) for r in RULES if r.title) + r"|Logs from unknown source)$"),
+    _T("expiry", "Routers and access points", "Certificates and domains expiring",
+       "A TLS certificate or a domain name is about to expire (the Certificates and domains module).",
+       r"^(?:Certificate for|Domain) .+ (?:expires in \d+ days?|has expired|was renewed)$"),
     _T("update", "NetMaster", "New NetMaster version", "A newer version of NetMaster is available.",
        r"^NetMaster \S+ is available$"),
     _T("system", "NetMaster", "Problems with NetMaster itself", "NetMaster cannot read a router, receive logs or find the gateway.", r".", True),
 ]
 
 
-_UPDATE_RX = next(t["rx"] for t in NOTIF_TYPES if t["id"] == "update")
+_SYSTEM_TYPES = [t for t in NOTIF_TYPES if t["id"] in ("expiry", "update")]  # the only types used by system events
 
 
 def classify(ev: dict) -> str:
     if ev.get("category") == "system":
-        return "update" if _UPDATE_RX.search(ev["title"]) else "system"
+        return next((t["id"] for t in _SYSTEM_TYPES if t["rx"].search(ev["title"])), "system")
     for t in NOTIF_TYPES[:-1]:
         if t["rx"].search(ev["title"]):
             return t["id"]

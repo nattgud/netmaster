@@ -92,6 +92,8 @@ async def lifespan(app: FastAPI):
     s.exposure = Exposure(cfg, db, events, s.modules)
     s.speed = SpeedTest(cfg, db, events, hub, s.modules)
     s.services = Services(cfg, events)
+    from .hostchecks import HostChecks
+    s.checks = HostChecks(db, events, inventory, net)
     from .hostflows import HostFlows
     from .geo import Geo
     s.geo = Geo(db)
@@ -113,7 +115,7 @@ async def lifespan(app: FastAPI):
         net.run(), dnsm.run(), freeze.run(), _prune_loop(cfg, db), _status_loop(app),
         inventory.run_poll(), inventory.run_sweep(), dhcp.run(), dnsguard.run(), refresh_oui(),
         s.ports.run(), s.exposure.run(), s.speed.run(), s.services.run(), s.hostflows.run(),
-        s.calls.run(), inventory.run_presence(), s.updater.run(),
+        s.calls.run(), inventory.run_presence(), s.updater.run(), s.checks.run(),
     )]
     s.modules.start_all()
     sniffer.start()
@@ -142,7 +144,7 @@ def _status(app: FastAPI) -> dict:
         },
         "push": s.push.status(),
         "services": s.services.status() + s.modules.services(), "speedtest": s.speed.status(), "update": s.updater.status(),
-        "ports": s.ports.status(), "exposure": s.exposure.status(), "host_flows": s.hostflows.status(),
+        "checks": s.checks.status(), "ports": s.ports.status(), "exposure": s.exposure.status(), "host_flows": s.hostflows.status(),
     }
 
 
@@ -198,10 +200,28 @@ def update_device(request: Request, mac: str, body: dict = Body(...)):
     return d
 
 
+@app.post("/api/checks")
+def add_check(request: Request, body: dict = Body(...)):
+    """Watch a device with ping (port 0 or left out) or a TCP port."""
+    try:
+        return request.app.state.checks.add(str(body.get("mac") or ""), int(body.get("port") or 0))
+    except (TypeError, ValueError) as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/checks/{cid}")
+def remove_check(request: Request, cid: str):
+    if not request.app.state.checks.remove(cid):
+        raise HTTPException(404, "Unknown check")
+    return {"ok": True}
+
+
 @app.delete("/api/devices/{mac}")
 def forget_device(request: Request, mac: str):
     if not request.app.state.inventory.forget(mac.lower()):
         raise HTTPException(404, "Unknown device")
+    for c in [c for c in request.app.state.checks.checks if c["mac"] == mac.lower()]:
+        request.app.state.checks.remove(c["id"])
     return {"ok": True}
 
 

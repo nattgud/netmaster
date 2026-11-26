@@ -252,8 +252,10 @@ class ModuleManager:
         out = []
         for m in self.instances.values():
             try:
-                if svc := m.status().get("service"):
+                st = m.status()
+                if svc := st.get("service"):
                     out.append(svc)
+                out.extend(s for s in st.get("services") or [] if isinstance(s, dict))  # several at once (NetMaster 0.2.6+)
             except Exception:
                 pass
         return out
@@ -272,7 +274,9 @@ class ModuleManager:
                         "enabled": bool(state.get(mid, {}).get("enabled")), "running": mid in self.tasks,
                         "last_ok": inst.last_ok if inst else None,
                         "last_error": (inst.last_error if inst else None) or self.load_errors.get(mid),
-                        "host": extra.get("host"), "label": extra.get("name")})
+                        "host": extra.get("host"), "label": extra.get("name"),
+                        # a short list shown in the module's card: [{"label", "value", "state": up|degraded|down}]
+                        "rows": [r for r in extra.get("rows") or [] if isinstance(r, dict)][:50]})
         return out
 
     # ---------- marketplace / install ----------

@@ -417,6 +417,23 @@ body.wizard-open { overflow: hidden; }
 .panel.folded .fold::before { transform: rotate(-45deg); margin-bottom: 0; }
 .update-box { padding: 8px 0 10px; margin-bottom: 8px; border-bottom: 1px solid var(--border); display: grid; gap: 6px; }
 .update-box .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+/* a module's list of what it watches (status() rows) */
+.mod-rows { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
+.mod-rows li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+.mod-rows .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.mod-rows li.up .dot { background: var(--ok); }
+.mod-rows li.degraded .dot { background: var(--warn); }
+.mod-rows li.down .dot { background: var(--bad); }
+.mod-rows .mono { overflow-wrap: anywhere; }
+/* uptime checks per device */
+.badge.chk { border: 1px solid var(--border); white-space: nowrap; }
+.badge.chk.ok { color: var(--ok); border-color: var(--ok); background: transparent; }
+.badge.chk.warn { color: var(--warn); border-color: var(--warn); background: transparent; }
+.badge.chk.bad { color: #fff; border-color: var(--bad); background: var(--bad); }
+.checks { display: grid; gap: 6px; margin: 10px 0; padding: 8px 0; border-top: 1px solid var(--border); }
+.check-row, .check-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.check-add select { max-width: 100%; }
+.check-add input { width: 7em; }
 .ev-more{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;padding:10px 4px 2px}
 .ev-more[hidden]{display:none}
 .ov-update{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 12px;padding:10px 14px;border:1px solid var(--accent);border-radius:10px;background:color-mix(in srgb,var(--accent) 12%,transparent)}
