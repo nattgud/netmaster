@@ -31,6 +31,18 @@ SECRETS_FILE = DATA_DIR / "secrets.json"
 ID_RX = re.compile(r"^[a-z0-9_]{1,40}$")
 FILE_RX = re.compile(r"^[A-Za-z0-9_\-]+(\.[A-Za-z0-9]+)?$")
 TYPES = ("text", "password", "number", "bool")
+LANG_RX = re.compile(r"^[a-z]{2}$")
+METRICS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS module_metrics(
+    module TEXT NOT NULL,
+    key TEXT NOT NULL,
+    ts REAL NOT NULL,
+    value REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS module_metrics_idx ON module_metrics(module, key, ts);
+"""
+METRICS_KEEP_S = 30 * 86400
+METRIC_EVERY_S = 60        # at most one stored value per metric and minute
 
 
 def _read_json(path: Path, default):
@@ -81,6 +93,16 @@ def validate_meta(meta: dict) -> dict:
     for a in meta["actions"]:
         if not isinstance(a, dict) or not ID_RX.match(str(a.get("id", ""))) or not a.get("label"):
             raise ValueError(f"Invalid action in module.json: {a}")
+    meta.setdefault("notifications", [])
+    for n in meta["notifications"]:
+        if not isinstance(n, dict) or not ID_RX.match(str(n.get("id", ""))) or not n.get("label") or not n.get("match"):
+            raise ValueError(f"Invalid notification type in module.json: {n}")
+        try:
+            re.compile(str(n["match"]))
+        except re.error as e:
+            raise ValueError(f"Invalid match pattern in notification type {n['id']}: {e}") from None
+        if len(str(n["match"])) > 500:
+            raise ValueError(f"The match pattern of notification type {n['id']} is too long")
     return meta
 
 
@@ -99,6 +121,11 @@ class ModuleManager:
         self._remote: tuple[float, list] | None = None
         self.source_error: str | None = None
         self.jobs: dict[str, dict] = {}
+        self._clients: dict[str, tuple[dict, float]] = {}   # router module -> (traffic by MAC, when)
+        self._metric_last: dict[tuple[str, str], float] = {}
+        self._metric_meta: dict[str, dict] = {}            # module -> {key: {"label", "unit"}}
+        with db._lock, db._conn:
+            db._conn.executescript(METRICS_SCHEMA)
         self._migrate_legacy()
 
     # ---------- stored state ----------
@@ -112,6 +139,8 @@ class ModuleManager:
         out = {}
         if INSTALLED.is_dir():
             for d in sorted(INSTALLED.iterdir()):
+                if d.name.startswith(".") or not d.is_dir():
+                    continue  # a half-finished install
                 try:
                     out[d.name] = validate_meta(json.loads((d / "module.json").read_text("utf-8")))
                 except (OSError, ValueError) as e:
@@ -182,25 +211,132 @@ class ModuleManager:
                 inst.stop()
             except Exception:
                 log.exception("Module %s failed to stop", mid)
-            if "router" in inst.meta.get("provides", []):
-                self.traffic = {}
+            if self._clients.pop(mid, None) is not None:
+                self._merge_clients()
 
     def start_all(self) -> None:
+        self.refresh_types()
         for mid in self.installed():
             self.start(mid)
+
+    # ---------- what modules add to the rest of the app ----------
+    def refresh_types(self) -> None:
+        """Notification types the installed modules declare (module.json "notifications")."""
+        from .push import set_module_types
+        types = []
+        for mid, meta in self.installed().items():
+            for n in meta.get("notifications") or []:
+                types.append({"id": f"{mid}.{n['id']}", "group": n.get("group") or meta["name"], "label": n["label"],
+                              "desc": n.get("desc", ""), "match": n["match"], "default": bool(n.get("default", True))})
+        set_module_types(types)
+
+    def strings(self) -> str:
+        """The installed modules' translations (strings.tsv in each module folder), as one TSV in the same
+        column order as web/i18n/strings.tsv. A module's file may have any subset of the languages."""
+        main = (Path(__file__).resolve().parent.parent / "web" / "i18n" / "strings.tsv")
+        try:
+            langs = main.read_text("utf-8").split("\n", 1)[0].strip().split("\t")
+        except OSError:
+            langs = ["en"]
+        out = ["\t".join(langs)]
+        for mid in self.installed():
+            f = INSTALLED / mid / "strings.tsv"
+            try:
+                rows = f.read_text("utf-8-sig").splitlines()
+            except OSError:
+                continue
+            head = [h.strip() for h in rows[0].split("\t")] if rows else []
+            if not head or head[0] != "en" or not all(LANG_RX.match(h) for h in head):
+                log.warning("Module %s: strings.tsv must start with a header row such as en<TAB>sv", mid)
+                continue
+            for r in rows[1:]:
+                c = r.split("\t")
+                if c and c[0].strip():
+                    by = {h: (c[i] if i < len(c) else "") for i, h in enumerate(head)}
+                    out.append("\t".join(by.get(lang, "").replace("\r", "") for lang in langs))
+        return "\n".join(out) + "\n"
+
+    def device_info(self, mac: str) -> list[dict]:
+        """What modules know about one device (switch port, access point, containers ...)."""
+        d = self.inventory.devices.get(mac) or {}
+        out = []
+        for mid, m in self.instances.items():
+            if type(m).device_info is ModuleBase.device_info:
+                continue
+            try:
+                rows = m.device_info(mac, d.get("ip"))
+            except Exception as e:
+                log.debug("Module %s device_info failed: %s", mid, e)
+                continue
+            rows = [{"label": str(r.get("label", "")), "value": str(r.get("value", "")),
+                     "state": r.get("state") if r.get("state") in ("up", "degraded", "down") else ""}
+                    for r in rows or [] if isinstance(r, dict)][:20]
+            if rows:
+                out.append({"module": mid, "name": m.meta["name"], "rows": rows})
+        return out
+
+    # ---------- metrics (ctx.record) ----------
+    def record(self, mid: str, key: str, value: float, label: str = "", unit: str = "") -> None:
+        meta = self._metric_meta.setdefault(mid, {})
+        if key not in meta or meta[key] != {"label": label or key, "unit": unit}:
+            meta[key] = {"label": label or key, "unit": unit}
+            self.db.set_meta(f"metrics_{mid}", json.dumps(meta))
+        now = time.time()
+        if now - self._metric_last.get((mid, key), 0) < METRIC_EVERY_S:
+            return
+        self._metric_last[(mid, key)] = now
+        self.db.execute("INSERT INTO module_metrics(module, key, ts, value) VALUES (?,?,?,?)", [(mid, key, now, float(value))])
+
+    def metric_keys(self, mid: str) -> dict:
+        if mid not in self._metric_meta:
+            try:
+                self._metric_meta[mid] = json.loads(self.db.get_meta(f"metrics_{mid}") or "{}")
+            except ValueError:
+                self._metric_meta[mid] = {}
+        return self._metric_meta[mid]
+
+    def metrics(self, mid: str, hours: float = 24, points: int = 144) -> dict:
+        """{key: {"label", "unit", "points": [[ts, average], ...]}} for the module's graphs."""
+        hours = min(max(hours, 1), METRICS_KEEP_S / 3600)
+        since = time.time() - hours * 3600
+        step = max(60.0, hours * 3600 / points)
+        out = {}
+        for key, m in self.metric_keys(mid).items():
+            rows = self.db.query("SELECT CAST((ts - ?) / ? AS INTEGER) AS b, AVG(value) AS v, MAX(ts) AS ts "
+                                 "FROM module_metrics WHERE module = ? AND key = ? AND ts >= ? GROUP BY b ORDER BY b",
+                                 (since, step, mid, key, since))
+            out[key] = {**m, "points": [[r["ts"], round(r["v"], 3)] for r in rows]}
+        return out
+
+    def prune_metrics(self) -> None:
+        with self.db._lock, self.db._conn:
+            self.db._conn.execute("DELETE FROM module_metrics WHERE ts < ?", (time.time() - METRICS_KEEP_S,))
+            known = set(self.installed())
+            for (mod,) in self.db._conn.execute("SELECT DISTINCT module FROM module_metrics").fetchall():
+                if mod not in known:
+                    self.db._conn.execute("DELETE FROM module_metrics WHERE module = ?", (mod,))
 
     def stop_all(self) -> None:
         for mid in list(self.instances):
             self.stop(mid)
 
     # ---------- capabilities ----------
+    def providers(self, what: str) -> list[ModuleBase]:
+        """Every running module that provides this. Several router modules may run at once
+        (for example a firewall and a Wi-Fi controller); the one that can pause devices comes first."""
+        found = [m for m in self.instances.values() if what in m.meta.get("provides", [])]
+        if what == "router":
+            found.sort(key=lambda m: not hasattr(m, "block"))
+        return found
+
     def provider(self, what: str) -> ModuleBase | None:
-        return next((m for m in self.instances.values() if what in m.meta.get("provides", [])), None)
+        return next(iter(self.providers(what)), None)
 
     @property
     def public_ip(self) -> str | None:
-        r = self.provider("router")
-        return getattr(r, "public_ip", None) if r else None
+        return next((ip for r in self.providers("router") if (ip := getattr(r, "public_ip", None))), None)
+
+    CLIENTS_MAX_AGE_S = 600   # a router module that stopped reporting no longer counts
 
     def report_clients(self, mid: str, clients: list[dict]) -> None:
         traffic = {}
@@ -210,24 +346,60 @@ class ModuleManager:
                 continue
             self.inventory.observe_dhcp(str(ip), mac, c.get("hostname"))
             traffic[mac] = {k: c.get(k) for k in ("down", "up", "usage", "signal", "online_s", "ssid", "conn")}
-        self.traffic, self.traffic_ts = traffic, time.time()
+        self._clients[mid] = (traffic, time.time())
+        self._merge_clients()
         for sink in (self.usage, self.wifi):
             if sink:
-                sink.record(traffic)
+                sink.record(self.traffic)
+
+    def _merge_clients(self) -> None:
+        """One view of all clients. When several routers know a device, the first one with a value wins
+        per field (the main router for traffic, the Wi-Fi controller fills in signal and network name)."""
+        order = [m.meta["id"] for m in self.providers("router")]
+        now, merged, newest = time.time(), {}, None
+        for mid in order + [m for m in self._clients if m not in order]:
+            if mid not in self._clients:
+                continue
+            traffic, ts = self._clients[mid]
+            if now - ts > self.CLIENTS_MAX_AGE_S:
+                continue
+            newest = max(newest or 0, ts)
+            for mac, row in traffic.items():
+                have = merged.setdefault(mac, {})
+                for k, v in row.items():
+                    if have.get(k) is None and v is not None:
+                        have[k] = v
+        self.traffic, self.traffic_ts = merged, newest
+
+    def blocked(self) -> set[str]:
+        """Paused MACs, from every router module that can pause."""
+        out: set[str] = set()
+        for r in self.providers("router"):
+            out |= {str(x).lower() for x in getattr(r, "blocked", None) or []}
+        return out
+
+    def pauser(self, mac: str) -> ModuleBase | None:
+        """The router module to pause/resume a device with: the one that has it paused, else the first that can."""
+        can = [r for r in self.providers("router") if hasattr(r, "block")]
+        return next((r for r in can if mac in {str(x).lower() for x in getattr(r, "blocked", None) or []}),
+                    can[0] if can else None)
 
     def load_mbps(self) -> float:
         return sum((t.get("down") or 0) + (t.get("up") or 0) for t in self.traffic.values()) * 8 / 1e6
 
     def router_status(self) -> dict:
-        r = self.provider("router")
-        if not r:
+        routers = self.providers("router")
+        if not routers:
             return {"enabled": False, "traffic": {}, "blocked": [], "audit": None}
+        r = routers[0]
         st = r.status()
         return {**st, "enabled": True, "module": r.meta["id"], "name": st.get("name") or r.meta["name"],
                 "last_ok": r.last_ok, "last_error": r.last_error, "clients": len(self.traffic),
-                "traffic": self.traffic, "blocked": list(getattr(r, "blocked", []) or []),
+                "traffic": self.traffic, "blocked": sorted(self.blocked()),
                 "audit": getattr(r, "audit", None), "audit_ts": getattr(r, "audit_ts", None),
-                "public_ip": getattr(r, "public_ip", None), "can_block": hasattr(r, "block")}
+                "public_ip": self.public_ip, "can_block": any(hasattr(x, "block") for x in routers),
+                "others": [{"module": x.meta["id"], "name": x.meta["name"], "last_ok": x.last_ok,
+                            "last_error": x.last_error} for x in routers[1:]]}
 
     def dns_status(self) -> dict:
         d = self.provider("dns")
@@ -276,7 +448,8 @@ class ModuleManager:
                         "last_error": (inst.last_error if inst else None) or self.load_errors.get(mid),
                         "host": extra.get("host"), "label": extra.get("name"),
                         # a short list shown in the module's card: [{"label", "value", "state": up|degraded|down}]
-                        "rows": [r for r in extra.get("rows") or [] if isinstance(r, dict)][:50]})
+                        "rows": [r for r in extra.get("rows") or [] if isinstance(r, dict)][:50],
+                        "charts": list(self.metric_keys(mid))})
         return out
 
     # ---------- marketplace / install ----------
@@ -384,11 +557,20 @@ class ModuleManager:
                 self._pip(meta["requires"], progress)
             progress(97, "Finishing")
             dest = INSTALLED / mid
-            shutil.rmtree(dest, ignore_errors=True)
-            tmp.replace(dest)
+            # Windows can hold new files for a moment (virus scan, indexing): try the move a few times.
+            for attempt in range(10):
+                try:
+                    shutil.rmtree(dest, ignore_errors=True)
+                    tmp.replace(dest)
+                    break
+                except PermissionError:
+                    if attempt == 9:
+                        raise
+                    time.sleep(0.5)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
         progress(100, "Installed")
+        self.refresh_types()
         log.info("Installed module %s %s", mid, meta["version"])
         return meta
 
@@ -438,6 +620,11 @@ class ModuleManager:
         secrets.pop(mid, None)
         _write_json(STATE_FILE, state)
         _write_json(SECRETS_FILE, secrets)
+        self.refresh_types()
+        self._metric_meta.pop(mid, None)
+        self.db.set_meta(f"metrics_{mid}", "{}")
+        with self.db._lock, self.db._conn:
+            self.db._conn.execute("DELETE FROM module_metrics WHERE module = ?", (mid,))
 
     def configure(self, mid: str, settings: dict | None = None, enabled: bool | None = None) -> None:
         meta = self.installed().get(mid)

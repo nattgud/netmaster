@@ -101,6 +101,19 @@ Any module can also list what it watches in its card in Settings: return `{"rows
 
 Any module can also define `protect() -> {ip: reason}` for devices that must never be paused.
 
+### NetMaster 0.2.7+: everything a module needs lives in its own folder
+
+A module never needs changes to NetMaster itself. On top of the above:
+
+- **Its own notification types.** List them under `"notifications"` in module.json:
+  `[{"id": "power", "group": "Power", "label": "Power cut", "desc": "Shown under the label.", "match": "^UPS .+ is running on battery$", "default": true}]`.
+  `match` is a regular expression on the event title. The type shows up under Settings → Notifications while the module is installed (its id becomes `<module>.<id>`).
+- **Its own translations.** Add `strings.tsv` to `files`. The first column is the English text (header `en`), then one column per language with a 2-letter header (`sv`, `de`, ...). Use `{0}`, `{1}` for parts that change. It works like [`web/i18n/strings.tsv`](../web/i18n/strings.tsv), but a module's rows never replace the app's own texts. Translate at least every label, help text, button and alert title into Swedish. Avoid very general patterns such as `{0} is down`: they also catch other titles.
+- **Graphs.** `self.ctx.record(key, value, label="", unit="")` stores a number (at most once a minute per key, kept 30 days). The module's card then shows a graph with the last 24 hours.
+- **Info on a device.** Override `device_info(self, mac, ip)` and return `[{"label": ..., "value": ..., "state": ...}]` (or `None`). The rows show in that device's details. See [`ups`](ups/module.py).
+- **Web APIs.** `HttpSession(base_url, verify_tls=False, auth=(user, pw), headers={...})` keeps cookies between calls, and `s.get(path)`, `s.post(path, json=...)`, `put`, `delete` return a response with `status`, `ok`, `text`, `json()` and `check()` (raises on 4xx/5xx). `http_request(method, url, ...)` does a single call. Both are blocking: run them with `ctx.to_thread`.
+- **Several routers.** Any number of `router` modules can run at once. Their client lists are merged, the blocked lists are combined, and "pause internet" goes to the router that can do it.
+
 ## Publishing
 
 1. Add your folder under `modules/`.

@@ -1,0 +1,78 @@
+{
+  "id": "ups",
+  "name": "UPS (NUT)",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Alerts when the power goes out and your UPS runs on battery, when the battery is low or needs replacing, and when the power is back. Reads a NUT server: a Synology or QNAP NAS, a Raspberry Pi, pfSense/OPNsense or Home Assistant's NUT add-on with the UPS connected by USB.",
+  "provides": [
+    "service"
+  ],
+  "requires": [],
+  "files": [
+    "module.py",
+    "strings.tsv"
+  ],
+  "settings": [
+    {
+      "key": "host",
+      "label": "NUT server address",
+      "type": "text",
+      "default": "",
+      "help": "The IP or name of the device the UPS is connected to. On a Synology NAS: Control Panel → Hardware & Power → UPS → enable network UPS server and add this computer's IP."
+    },
+    {
+      "key": "port",
+      "label": "Port",
+      "type": "number",
+      "default": 3493
+    },
+    {
+      "key": "ups",
+      "label": "UPS name (optional)",
+      "type": "text",
+      "default": "",
+      "help": "Leave empty to watch every UPS on the server. Synology calls its UPS \"ups\"."
+    },
+    {
+      "key": "username",
+      "label": "Username (optional)",
+      "type": "text",
+      "default": "",
+      "help": "Usually not needed just to read the status."
+    },
+    {
+      "key": "password",
+      "label": "Password (optional)",
+      "type": "password",
+      "default": ""
+    },
+    {
+      "key": "low_runtime_min",
+      "label": "Warn when less than this many minutes of battery remain",
+      "type": "number",
+      "default": 10
+    },
+    {
+      "key": "interval_s",
+      "label": "Check every (seconds)",
+      "type": "number",
+      "default": 15
+    }
+  ],
+  "actions": [
+    {
+      "id": "check",
+      "label": "Check now",
+      "help": "Reads the UPS right away and shows what it reports."
+    }
+  ],
+  "notifications": [
+    {
+      "id": "power",
+      "group": "Power",
+      "label": "Power cut and UPS battery",
+      "desc": "The UPS runs on battery, its battery is low or worn out, or the power is back.",
+      "match": "^UPS .+ (?:is running on battery|battery is almost empty|battery needs replacing|is overloaded)$|^Power is back on UPS "
+    }
+  ]
+}

@@ -32,6 +32,9 @@ async def _prune_loop(cfg, db) -> None:
             db.prune(cfg.sample_retention_days, cfg.syslog_retention_days)
         if auth := getattr(app.state, "auth", None):
             auth.prune()
+        if mods := getattr(app.state, "modules", None):
+            with contextlib.suppress(Exception):
+                mods.prune_metrics()
         await asyncio.sleep(3600)
 
 
@@ -358,8 +361,8 @@ async def set_paused(s, mac: str, paused: bool, via: str = "NetMaster") -> bool:
         raise PauseError(404, "Unknown device")
     if paused and (why := _protected(s).get(mac)):
         raise PauseError(403, f"This is {why}. Pausing it would lock up the network, so it is not allowed.")
-    router = s.modules.provider("router")
-    if not router or not hasattr(router, "block"):
+    router = s.modules.pauser(mac)   # with several router modules: the one that can pause (or has it paused)
+    if not router:
         raise PauseError(400, "No router module that can pause devices is set up")
     try:
         blocked = await asyncio.to_thread(router.block, mac, bool(paused), d.get("name") or d.get("hostname") or "")
@@ -657,6 +660,25 @@ async def module_action(request: Request, mid: str, aid: str, body: dict = Body(
     except Exception as e:
         raise HTTPException(400, str(e))
     return {"message": msg}
+
+
+@app.get("/api/modules/{mid}/metrics")
+def module_metrics(request: Request, mid: str, hours: float = 24):
+    """History of the values a module records with ctx.record(), for the graphs in its card."""
+    return request.app.state.modules.metrics(mid, hours)
+
+
+@app.get("/api/i18n/modules.tsv")
+def module_strings(request: Request):
+    """The installed modules' own translations, in the same format as web/i18n/strings.tsv."""
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(request.app.state.modules.strings(), media_type="text/tab-separated-values; charset=utf-8")
+
+
+@app.get("/api/devices/{mac}/modules")
+def device_module_info(request: Request, mac: str):
+    """What modules know about a device (switch port, access point, containers ...)."""
+    return request.app.state.modules.device_info(mac.lower())
 
 
 @app.put("/api/modules/{mid}")

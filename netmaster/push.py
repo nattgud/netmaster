@@ -62,21 +62,35 @@ NOTIF_TYPES = [
     _T("traffic", "Security", "Unusual traffic from a device", "Heavy upload, or activity at night.", r"^Heavy upload from| is active at night", False),
     _T("router_log", "Security", "Alerts from the router logs", "Failed logins, attacks, reboots and similar lines in the router logs.",
        "^(?:" + "|".join(re.escape(r.title) for r in RULES if r.title) + r"|Logs from unknown source)$"),
-    _T("expiry", "Routers and access points", "Certificates and domains expiring",
-       "A TLS certificate or a domain name is about to expire (the Certificates and domains module).",
-       r"^(?:Certificate for|Domain) .+ (?:expires in \d+ days?|has expired|was renewed)$"),
     _T("update", "NetMaster", "New NetMaster version", "A newer version of NetMaster is available.",
        r"^NetMaster \S+ is available$"),
     _T("system", "NetMaster", "Problems with NetMaster itself", "NetMaster cannot read a router, receive logs or find the gateway.", r".", True),
 ]
 
 
-_SYSTEM_TYPES = [t for t in NOTIF_TYPES if t["id"] in ("expiry", "update")]  # the only types used by system events
+_UPDATE = next(t for t in NOTIF_TYPES if t["id"] == "update")
+
+# Types declared by installed modules (module.json "notifications"), set by the module manager.
+# Their ids are "<module>.<id>". They are checked before the built-in ones, so a module's own titles
+# always land in its own type.
+MODULE_TYPES: list[dict] = []
+
+
+def set_module_types(types: list[dict]) -> None:
+    MODULE_TYPES[:] = [_T(t["id"], t["group"], t["label"], t["desc"], t["match"], t.get("default", True)) for t in types]
+
+
+def all_types() -> list[dict]:
+    """Every notification type: the built-in ones, then the modules' ones, then "Problems with NetMaster itself"."""
+    return NOTIF_TYPES[:-1] + MODULE_TYPES + NOTIF_TYPES[-1:]
 
 
 def classify(ev: dict) -> str:
+    for t in MODULE_TYPES:
+        if t["rx"].search(ev["title"]):
+            return t["id"]
     if ev.get("category") == "system":
-        return next((t["id"] for t in _SYSTEM_TYPES if t["rx"].search(ev["title"])), "system")
+        return "update" if _UPDATE["rx"].search(ev["title"]) else "system"
     for t in NOTIF_TYPES[:-1]:
         if t["rx"].search(ev["title"]):
             return t["id"]
@@ -144,14 +158,14 @@ class Push:
             p = json.loads(self.db.get_meta("push_prefs") or "{}")
         except ValueError:
             p = {}
-        on = {t["id"]: t["default"] for t in NOTIF_TYPES} | {k: bool(v) for k, v in (p.get("types") or {}).items()}
+        on = {t["id"]: t["default"] for t in all_types()} | {k: bool(v) for k, v in (p.get("types") or {}).items()}
         return {"types": on, "muted": _rules(p.get("muted") or [])}
 
     def set_prefs(self, types: dict | None = None, muted: list | None = None) -> dict:
         p = self.prefs()
         if types is not None:
-            ids = {t["id"] for t in NOTIF_TYPES}
-            p["types"] |= {k: bool(v) for k, v in types.items() if k in ids}
+            ids = {t["id"] for t in all_types()}
+            p["types"] |= {k: bool(v) for k, v in types.items() if k in ids or "." in k}  # module types stay when it is off
         if muted is not None:
             p["muted"] = _rules(muted)
         self.db.set_meta("push_prefs", json.dumps(p))
@@ -199,7 +213,7 @@ class Push:
             st = stats.setdefault(classify(r), {"n": 0, "last": r["ts"], "example": r["title"]})
             st["n"] += 1
         return [{k: t[k] for k in ("id", "group", "label", "desc")} | {"on": p["types"].get(t["id"], True)}
-                | stats.get(t["id"], {"n": 0, "last": None, "example": None}) for t in NOTIF_TYPES]
+                | stats.get(t["id"], {"n": 0, "last": None, "example": None}) for t in all_types()]
 
     def on_event(self, ev: dict) -> None:
         if not self.wanted(ev):

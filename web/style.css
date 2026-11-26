@@ -442,3 +442,6 @@ body.wizard-open { overflow: hidden; }
 .update-notes { white-space: pre-wrap; font: inherit; margin: 6px 0 0; max-height: 240px; overflow: auto; }
 .update-chip { background: var(--accent); color: var(--bg); }
 .tabs button.has-update::after { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 5px; vertical-align: middle; }
+/* module graphs (ctx.record) and module info per device (device_info) */
+.mod-chart { margin-top: 8px; min-width: 0; }
+.dev-mods { margin: 8px 0; padding: 6px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }

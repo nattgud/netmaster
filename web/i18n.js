@@ -91,18 +91,33 @@
   root.style.visibility = 'hidden';
   const show = () => { root.style.visibility = ''; };
   setTimeout(show, 2500);
-  fetch('i18n/strings.tsv').then((r) => r.text()).then((tsv) => {
+  const appKeys = new Set();
+  // Adds the rows of a strings.tsv. A module's rows never replace the app's own texts.
+  function load(tsv, fromModule) {
     const rows = tsv.split(/\r?\n/);
     const col = rows[0].split('\t').indexOf(lang);
+    if (col < 0) return;
     for (const row of rows.slice(1)) {
       const c = row.split('\t');
-      if (!c[0] || !c[col]) continue;
+      if (!c[0] || !c[col] || (fromModule && appKeys.has(c[0]))) continue;
+      if (!fromModule) appKeys.add(c[0]);
       if (/\{\d\}/.test(c[0])) {
         const src = c[0].split(/\{\d\}/).map((x) => x.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&')).join('(.+?)');
-        patterns.push([new RegExp(`^${src}$`), c[col]]);
+        const i = patterns.findIndex((p) => p[0].source === `^${src}$`);
+        if (i >= 0) patterns[i][1] = c[col]; else patterns.push([new RegExp(`^${src}$`), c[col]]);
       } else dict.set(c[0], c[col]);
     }
     patterns.sort((a, b) => b[0].source.length - a[0].source.length);  // most specific first
+  }
+  // The installed modules' own strings.tsv files (needs a login; on the login page it just finds nothing).
+  const moduleStrings = () => fetch('api/i18n/modules.tsv', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.text() : '')).then((tsv) => { if (tsv) load(tsv, true); }).catch(() => {});
+  // The app calls this when a module is installed or updated, so its texts are translated without a reload.
+  window.i18n.reloadModules = () => moduleStrings().then(() => { if (document.body) walk(document.body); });
+  fetch('i18n/strings.tsv').then((r) => r.text()).then((tsv) => {
+    load(tsv, false);
+    return moduleStrings();
+  }).then(() => {
     const start = () => {
       walk(document.body);
       new MutationObserver((muts) => {

@@ -36,6 +36,19 @@ What a module can provide (module.json "provides"), and the methods/attributes t
     "smart_home" - shares devices the user picked ("Show in ...", devices()[mac]["share"]) with a smart-home
                 system. Use subscribe_events(), traffic(), top_domains(), paused() and pause(mac, on).
 
+Several router modules may run at once (a firewall and a Wi-Fi controller): their clients are merged and
+the one with block() is used for pausing.
+
+Helpers: HttpSession / http_request (JSON, forms, Basic auth, cookies, self-signed certificates),
+http_get, ServiceWatch. ctx.record(key, value, label, unit) keeps history and draws a graph in the card.
+device_info(mac, ip) adds lines to a device's details in the device list.
+
+module.json may also declare
+    "notifications": [{"id": "on_battery", "group": "Power", "label": "UPS on battery",
+                       "desc": "...", "match": "regex for the event titles", "default": true}]
+so the user can turn the module's alerts on and off, and the module folder may hold a strings.tsv
+(first row: en<TAB>sv<TAB>... , then one row per English text) with its translations.
+
 Any module may also return {"service": ServiceWatch(...).status()} from status() to show up in the
 Services panel ({"services": [...]} for several, each optionally with "value" and "detail" text),
 {"rows": [{"label", "value", "state": "up"|"degraded"|"down"}]} to list what it watches in its card,
@@ -111,13 +124,11 @@ class Context:
     @property
     def can_pause(self) -> bool:
         """True when a router module that can pause devices is running."""
-        r = self._m.provider("router")
-        return bool(r and hasattr(r, "block") and self._m.pause_fn)
+        return bool(self._m.pause_fn and any(hasattr(r, "block") for r in self._m.providers("router")))
 
     def paused(self) -> set[str]:
-        """MAC addresses whose internet is paused right now."""
-        r = self._m.provider("router")
-        return set(getattr(r, "blocked", None) or []) if r else set()
+        """MAC addresses whose internet is paused right now (by any router module)."""
+        return self._m.blocked()
 
     def protected(self) -> dict[str, str]:
         """{mac: reason} for devices that can never be paused (the router, the NetMaster server ...)."""
@@ -164,6 +175,11 @@ class Context:
         kind: a fixed id for the type of alert (lowercase, _), used by automations such as Home Assistant."""
         self._m.events.emit(category, severity, title, detail, key or self.id, kind=kind)
 
+    def record(self, key: str, value: float, label: str = "", unit: str = "") -> None:
+        """A measurement to keep history for (at most one per minute is stored, kept 30 days). Every key gets
+        a small graph in the module's card. key: a fixed id such as "battery"; label: what the user sees."""
+        self._m.record(self.id, key, value, label, unit)
+
     def add_log(self, line: str, host: str, alarm: bool = True, ts: float | None = None) -> None:
         """One log line from a device. alarm=False stores it without raising alerts (use for old history)."""
         self._m.syslog._line(line, host, alarm=alarm, ts=ts)
@@ -182,6 +198,96 @@ class Context:
     @staticmethod
     async def sleep(seconds: float) -> None:
         await asyncio.sleep(seconds)
+
+
+class HttpResponse:
+    """What http_request returns. HTTP errors are not raised: check .status (or call .check())."""
+
+    def __init__(self, status: int, headers: dict, body: bytes, url: str):
+        self.status, self.headers, self.body, self.url = status, headers, body, url
+
+    @property
+    def ok(self) -> bool:
+        return 200 <= self.status < 300
+
+    @property
+    def text(self) -> str:
+        return self.body.decode("utf-8", "replace")
+
+    def json(self):
+        import json
+        return json.loads(self.body) if self.body.strip() else None
+
+    def check(self) -> "HttpResponse":
+        """Raises a readable error for 4xx/5xx, e.g. "Login refused (HTTP 401)"."""
+        if not self.ok:
+            what = {401: "Login refused", 403: "Access denied", 404: "Not found"}.get(self.status, "The device answered")
+            raise RuntimeError(f"{what} (HTTP {self.status})")
+        return self
+
+
+class HttpSession:
+    """Blocking HTTP client for a device's API (run it with ctx.to_thread). Keeps cookies between calls,
+    so it works for web logins (UniFi, pfSense), and can use HTTP Basic auth (OPNsense, routers).
+
+        api = HttpSession("https://192.168.1.1", verify_tls=False, auth=(key, secret))
+        r = api.get("/api/core/firmware/status").check().json()
+        api.post("/api/login", json={"username": u, "password": p})
+    """
+
+    def __init__(self, base_url: str = "", verify_tls: bool = True, auth: tuple[str, str] | None = None,
+                 headers: dict | None = None, timeout: float = 15):
+        import http.cookiejar
+        import ssl
+        import urllib.request
+        self.base = base_url.rstrip("/")
+        self.timeout, self.headers = timeout, {"User-Agent": "NetMaster", **(headers or {})}
+        ctx = ssl.create_default_context()
+        if not verify_tls:   # devices in the home network often have self-signed certificates
+            ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
+        self.cookies = http.cookiejar.CookieJar()
+        self._open = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx),
+                                                 urllib.request.HTTPCookieProcessor(self.cookies)).open
+        if auth:
+            import base64
+            self.headers["Authorization"] = "Basic " + base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
+
+    def request(self, method: str, path: str, json=None, data: bytes | dict | None = None,
+                headers: dict | None = None, timeout: float | None = None, limit: int = 20_000_000) -> HttpResponse:
+        import json as _json
+        import urllib.error
+        import urllib.parse
+        import urllib.request
+        url = path if "://" in path else self.base + "/" + path.lstrip("/")
+        h = {**self.headers, **(headers or {})}
+        if json is not None:
+            data, h["Content-Type"] = _json.dumps(json).encode(), "application/json"
+        elif isinstance(data, dict):
+            data, h["Content-Type"] = urllib.parse.urlencode(data).encode(), "application/x-www-form-urlencoded"
+        req = urllib.request.Request(url, data=data, headers=h, method=method.upper())
+        try:
+            with self._open(req, timeout=timeout or self.timeout) as r:
+                return HttpResponse(r.status, dict(r.headers), r.read(limit), r.url)
+        except urllib.error.HTTPError as e:
+            return HttpResponse(e.code, dict(e.headers or {}), e.read(limit) if e.fp else b"", url)
+
+    def get(self, path: str, **kw) -> HttpResponse:
+        return self.request("GET", path, **kw)
+
+    def post(self, path: str, **kw) -> HttpResponse:
+        return self.request("POST", path, **kw)
+
+    def put(self, path: str, **kw) -> HttpResponse:
+        return self.request("PUT", path, **kw)
+
+    def delete(self, path: str, **kw) -> HttpResponse:
+        return self.request("DELETE", path, **kw)
+
+
+def http_request(method: str, url: str, json=None, data=None, headers: dict | None = None,
+                 auth: tuple[str, str] | None = None, timeout: float = 15, verify_tls: bool = True) -> HttpResponse:
+    """One blocking request (run it with ctx.to_thread). For several calls with a login, use HttpSession."""
+    return HttpSession("", verify_tls, auth, timeout=timeout).request(method, url, json=json, data=data, headers=headers)
 
 
 def http_get(url: str, headers: dict | None = None, timeout: float = 8, verify_tls: bool = True) -> tuple[int, bytes]:
@@ -266,6 +372,12 @@ class ModuleBase:
 
     def stop(self) -> None:
         """Called when the module is disabled or NetMaster stops. Close connections here if needed."""
+
+    def device_info(self, mac: str, ip: str | None) -> list[dict] | None:
+        """Optional: what this module knows about one device, shown when the user opens it in the device
+        list: [{"label": "Switch port", "value": "Core switch, port 5"}]. Called often: use data you
+        already have from run(), never ask the device here."""
+        return None
 
     # Buttons in the module's card. Declare them in module.json:
     #   "actions": [{"id": "test", "label": "Send a test", "help": "optional"}]

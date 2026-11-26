@@ -72,6 +72,7 @@ $$('[data-goto]').forEach((b) => b.addEventListener('click', () => showTab(b.dat
 // ---------- statuskort ----------
 function renderStatus(s) {
   state.status = s;
+  moduleSideEffects(s);
   const gw = s.targets.find((t) => t.kind === 'gateway');
   const inet = s.targets.filter((t) => t.kind === 'internet');
   const devices = s.targets.filter((t) => t.kind === 'device');
@@ -150,7 +151,7 @@ function renderStatus(s) {
     cards.push({
       label: esc(sv.name), state: sv.state,
       value: sv.value ? esc(sv.value) : sv.state === 'up' ? 'Up' : sv.state === 'down' ? 'Down' : sv.state === 'degraded' ? 'Problem' : 'Checking…',
-      sub: sv.detail ? esc(sv.detail) : sv.state === 'down' ? `${esc(sv.error || '')} · since ${fmtTime(sv.since)}` : sv.ms != null ? `${Math.round(sv.ms)} ms` : '',
+      sub: sv.detail ? sv.detail.split(' · ').map((x) => `<span>${esc(x)}</span>`).join(' · ') : sv.state === 'down' ? `${esc(sv.error || '')} · since ${fmtTime(sv.since)}` : sv.ms != null ? `${Math.round(sv.ms)} ms` : '',
     });
   }
   // Devices watched with ping or a TCP port (chosen in the device list)
@@ -164,7 +165,7 @@ function renderStatus(s) {
   // Cards that only say OK become small chips; only problems get big cards.
   const ok = cards.filter((c) => c.state === 'up');
   const bad = cards.filter((c) => c.state !== 'up');
-  $('#okbar').innerHTML = ok.map((c) => `<span class="chip" title="${c.sub.replace(/"/g, '&quot;')}">✓ ${c.label}</span>`).join('');
+  $('#okbar').innerHTML = ok.map((c) => `<span class="chip" title="${c.sub.replace(/<[^>]+>/g, '').replace(/"/g, '&quot;')}">✓ ${c.label}</span>`).join('');
   $('#cards').innerHTML = bad.map((c) => `
     <div class="card ${c.state}"${c.goto ? ` data-goto="${c.goto}" role="button" tabindex="0" style="cursor:pointer"` : ''}>
       <span class="label">${c.label}</span>
@@ -243,12 +244,16 @@ const SPARK_FMT = {
   ms: (v) => (v == null ? '–' : `${Math.round(v)} ms`),
   dbm: (v) => (v == null ? '–' : `${Math.round(v - 100)} dBm`),
 };
+// Graphs of module measurements (ctx.record) use the key "u:<unit>".
+const unitFmt = (unit) => (v) => (v == null ? '–' : `${Math.abs(v) >= 100 ? Math.round(v) : +v.toFixed(1)}${unit ? ` ${unit}` : ''}`);
+const sparkFmt = (key) => SPARK_FMT[key] || (key?.startsWith('u:') ? unitFmt(key.slice(2)) : null);
 function spark(series, fmt, note = '', fmtKey = '') {
   const pts = series.flatMap((s) => s.pts).filter((p) => p[1] != null);
   const xs = pts.map((p) => p[0]);
   if (new Set(xs).size < 2) return '<div class="muted small">Not enough data yet. The graph fills in minute by minute.</div>';
   const x0 = Math.min(...xs), dx = Math.max(...xs) - x0 || 1;
-  const y1 = niceMax(Math.max(...pts.map((p) => p[1])) * 1.05 || 1);
+  const top = Math.max(...pts.map((p) => p[1]));
+  const y1 = fmtKey === 'u:%' && top <= 100 && top > 50 ? 100 : niceMax(top * 1.05 || 1);  // percent: stop at 100 %
   const W = 300, H = 90;
   const X = (x) => ((x - x0) / dx) * W, Y = (y) => H - (y / y1) * (H - 2) - 1;
   const line = (s) => s.pts.filter((p) => p[1] != null).map(([x, y]) => `${X(x).toFixed(1)},${Y(y).toFixed(1)}`).join(' ');
@@ -271,7 +276,7 @@ function sparkHover(e) {
   const plot = e.target.closest?.('.sp-plot');
   $$('.sp-tip, .sp-cursor').forEach((el) => { if (!plot || !plot.contains(el)) el.hidden = true; });
   if (!plot) return;
-  const box = plot.closest('.sparkbox'), d = JSON.parse(box.dataset.spark), fmt = SPARK_FMT[box.dataset.fmt] || (box.closest('#speed') ? SPARK_FMT.mbit : fmtRateBits);
+  const box = plot.closest('.sparkbox'), d = JSON.parse(box.dataset.spark), fmt = sparkFmt(box.dataset.fmt) || (box.closest('#speed') ? SPARK_FMT.mbit : fmtRateBits);
   const r = plot.getBoundingClientRect(), cx = (e.touches?.[0] || e).clientX;
   const f = Math.min(1, Math.max(0, (cx - r.left) / r.width)), ts = d.x0 + f * d.dx;
   const near = (p) => p.reduce((a, b) => (Math.abs(b[0] - ts) < Math.abs(a[0] - ts) ? b : a));
@@ -578,6 +583,51 @@ function smartHome() {
   const m = (state.status?.modules || []).find((x) => x.enabled && x.provides.includes('smart_home'));
   return m ? (m.label || m.name) : '';
 }
+// What modules know about a device (switch port, access point, containers ...): device_info() in a module.
+function devModsHtml(list) {
+  if (!list?.length) return '';
+  return list.map((m) => `<div class="dev-mods small"><b>${esc(m.name)}</b>${modRowsHtml(m.rows)}</div>`).join('');
+}
+// rows from a module (status() rows, device_info): a coloured dot from state, value parts translated one by one
+function modRowsHtml(rows) {
+  return `<ul class="mod-rows">${rows.map((r) => `<li class="${esc(r.state || '')}">
+    <span class="dot"></span><span class="mono">${esc(r.label)}</span><span class="muted">${String(r.value || '').split(' · ').map((x) => `<span>${esc(x)}</span>`).join(' · ')}</span></li>`).join('')}</ul>`;
+}
+function loadDevMods(mac, force = false) {
+  const have = (state.devMods ||= {})[mac];
+  if (!force && have && (have.busy || Date.now() - have.ts < 60000)) return;
+  state.devMods[mac] = { ...(have || {}), busy: true, ts: Date.now() };
+  api(`/api/devices/${mac}/modules`).then((data) => {
+    const changed = JSON.stringify(data) !== JSON.stringify(have?.data);
+    state.devMods[mac] = { data, ts: Date.now() };
+    if (changed) renderDevices();
+  }).catch(() => { state.devMods[mac] = { ...(have || {}), ts: Date.now() }; });
+}
+// Things that follow the status message: module translations, graphs and device info stay current.
+function moduleSideEffects(s) {
+  const sig = (s.modules || []).map((m) => `${m.id}@${m.version}`).sort().join(',');
+  if (state.modSig !== undefined && state.modSig !== sig) window.i18n?.reloadModules?.();
+  state.modSig = sig;
+  if (state.openHist) loadDevMods(state.openHist);
+  for (const m of s.modules || []) if (m.enabled && m.charts?.length) loadModMetrics(m.id);
+}
+function loadModMetrics(mid) {
+  const have = (state.modMetrics ||= {})[mid];
+  if (have && (have.busy || Date.now() - have.ts < 60000)) return;
+  if (!document.querySelector(`#mod-panel [data-mod-st="${mid}"]`)) return;  // only while the card is on screen
+  state.modMetrics[mid] = { ...(have || {}), busy: true, ts: Date.now() };
+  api(`/api/modules/${mid}/metrics?hours=24`).then((data) => {
+    state.modMetrics[mid] = { data, ts: Date.now() };
+    updateModStatus();
+  }).catch(() => { state.modMetrics[mid] = { ...(have || {}), ts: Date.now() }; });
+}
+function modCharts(mid) {
+  const data = state.modMetrics?.[mid]?.data;
+  if (!data) return '';
+  return Object.values(data).filter((c) => c.points?.length).map((c) =>
+    `<div class="mod-chart"><div class="small"><b>${esc(c.label)}</b> <span class="muted">· 24 h</span></div>${
+      spark([{ name: c.label, cls: 's-down', pts: c.points }], unitFmt(c.unit), '', `u:${c.unit || ''}`).replace('class="sparkbox"', 'class="sparkbox short"')}</div>`).join('');
+}
 // ---------- uptime checks (ping or a TCP port) per device ----------
 const CHECK_STATE = { up: ['ok', '✓', 'Up'], slow: ['warn', '!', 'Slow'], down: ['bad', '✗', 'Not responding'], unknown: ['', '…', 'Checking…'] };
 const devChecks = (mac) => (state.status?.checks || []).filter((c) => c.mac === mac);
@@ -591,7 +641,7 @@ function checkBadges(mac) {
 function checksHtml(d, ports) {
   const list = devChecks(d.mac), have = new Set(list.map((c) => c.port));
   const names = state.status?.ports?.names || {};
-  const opts = [[0, 'Ping'], ...(ports || []).map((p) => [p, `Port ${p}${names[p] ? ` (${names[p]})` : ''}`])].filter(([p]) => !have.has(p));
+  const opts = [[0, 'Ping'], ...(ports || []).map((p) => [p, `${window.i18n?.t('Port') || 'Port'} ${p}${names[p] ? ` (${names[p]})` : ''}`])].filter(([p]) => !have.has(p));
   // keep what the user picked or typed when the list is redrawn by live updates
   const dr = state.chkDraft?.mac === d.mac ? state.chkDraft : {};
   const sel = dr.port ?? String(opts[0]?.[0] ?? 'other');
@@ -623,6 +673,7 @@ function histRow(d) {
       : '<div class="muted small">Loading…</div>'}
     ${wifiHtml(state.wifiHist?.[d.mac])}
     ${dnsHtml(state.dnsHist?.[d.mac])}
+    ${devModsHtml(state.devMods?.[d.mac]?.data)}
     ${checksHtml(d, ports)}
     <div class="hist-actions">
       <button class="ghost small" data-act="watch">${d.watch ? '🔔 Notifying when it comes/goes · turn off' : '🔔 Notify me when it comes online or goes offline'}</button>
@@ -1070,6 +1121,7 @@ $('#devices').addEventListener('click', async (e) => {
       api(`/api/usage/${mac}?hours=24`).then((h) => { (state.hist ||= {})[mac] = h; renderDevices(); });
       api(`/api/wifi/${mac}?hours=24`).then((w) => { (state.wifiHist ||= {})[mac] = w; renderDevices(); }).catch(() => {});
       api(`/api/dns/${mac}?hours=24`).then((x) => { (state.dnsHist ||= {})[mac] = x; renderDevices(); }).catch(() => {});
+      loadDevMods(mac, true);
     }
     return;
   }
@@ -1287,9 +1339,8 @@ function modStatus(m) {
     : live?.last_error ? `<span class="danger-text">${esc(live.last_error)}</span>`
     : live?.last_ok ? `<span class="ok-text">working · ${fmtAgo(live.last_ok)} ago</span>` : '<span class="muted">starting…</span>';
   // modules can list what they watch (status() → rows)
-  const rows = enabled && live?.rows?.length ? `<ul class="mod-rows">${live.rows.map((r) => `<li class="${esc(r.state || '')}">
-    <span class="dot"></span><span class="mono">${esc(r.label)}</span><span class="muted">${String(r.value || '').split(' · ').map((x) => `<span>${esc(x)}</span>`).join(' · ')}</span></li>`).join('')}</ul>` : '';
-  return line + rows;
+  const rows = enabled && live?.rows?.length ? modRowsHtml(live.rows) : '';
+  return line + rows + (enabled && live?.charts?.length ? modCharts(m.id) : '');
 }
 function updateModStatus() {
   for (const m of state.mods?.modules || []) {

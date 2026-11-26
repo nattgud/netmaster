@@ -18,7 +18,7 @@
     {
       "id": "certs",
       "name": "Certificates and domains",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": "NetMaster",
       "description": "Warns before the TLS certificates on your web services (NAS, router, home server, websites) and your domain names expire. Works with self-signed certificates in the home network too. Domain dates come straight from the registry (RDAP or WHOIS), no account needed.",
       "provides": [
@@ -26,14 +26,15 @@
       ],
       "requires": [],
       "sha256": {
-        "module.json": "5d03dc9d5363d2fe984cc75fdd04427f8c33f7f9aaf7b4f034a2016d4f8868fa",
-        "module.py": "3a5ed1f8b802b3eed18ecc2f5d28056fcf09bfa512627926ef953f88162af551"
+        "module.json": "010a12384f4fd2378eb45754d9dbbc9c2b558aff5ca36419daf9c42667c32d96",
+        "module.py": "3a5ed1f8b802b3eed18ecc2f5d28056fcf09bfa512627926ef953f88162af551",
+        "strings.tsv": "1e28dec1a4896c29487e550ba9615a1350ed70ba714e1e0cb1c3e650d74d5bda"
       }
     },
     {
       "id": "ha_mqtt",
       "name": "Home Assistant (MQTT)",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": "NetMaster",
       "description": "Sends security alerts (with a fixed type per alert for automations, plus the device, IP, MAC and details such as the port or program), the number of unknown devices, and the devices you pick (presence, IP, MAC, top sites and an Internet pause switch) to Home Assistant through your MQTT broker. Home Assistant finds everything by itself (MQTT discovery).",
       "provides": [
@@ -43,8 +44,9 @@
         "paho-mqtt>=2.0"
       ],
       "sha256": {
-        "module.json": "e88bee3c060564dd9002ccce18373dd2499b94ddb6db663e0a0f2999d5e27716",
-        "module.py": "c98a05c8838775bc4924961cebbbc1a184a64130b54c41cc04db830e0bb8c225"
+        "module.json": "0d0c710d231c5ba2be5f60f22363d5fa2cacafc093d4a44bcb953718673def55",
+        "module.py": "c98a05c8838775bc4924961cebbbc1a184a64130b54c41cc04db830e0bb8c225",
+        "strings.tsv": "6c650e6f3e66dd5220a4010e3140ed49c469bae634e4e22e0940852cd747df1f"
       }
     },
     {
@@ -108,6 +110,22 @@
       "sha256": {
         "module.json": "c6166a9224cd05cfd128a5a88c316d9d514e2832c9ecbe2600f0326f2902bd7b",
         "module.py": "d870c5be6ed52b0e3d317fd201913ae06f1deac85772529a968495097cb1dac3"
+      }
+    },
+    {
+      "id": "ups",
+      "name": "UPS (NUT)",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Alerts when the power goes out and your UPS runs on battery, when the battery is low or needs replacing, and when the power is back. Reads a NUT server: a Synology or QNAP NAS, a Raspberry Pi, pfSense/OPNsense or Home Assistant's NUT add-on with the UPS connected by USB.",
+      "provides": [
+        "service"
+      ],
+      "requires": [],
+      "sha256": {
+        "module.json": "70253ea102d4f4cdaf284579f0c9e6cef9beec536efd325b3dc0530b83835372",
+        "module.py": "40707860afb4ec6eca08bfc13048a1d945ebd179c71b63bf389ed49b1e838bb1",
+        "strings.tsv": "6c756931ac8cb20e884866586019941bc7a05d07f0c0c34915e80b954931c9ba"
       }
     }
   ]
