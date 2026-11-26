@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>NetMaster</title>
+  <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="i18n.js"></script>
+</head>
+<body>
+  <div id="login" class="login" hidden></div>
+  <div id="wizard" class="wizard" hidden></div>
+  <header class="top">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="28" height="28">
+      <span>NetMaster</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+      <button role="tab" data-tab="events">Events</button>
+      <button role="tab" data-tab="devices">Devices</button>
+      <button role="tab" data-tab="security">Security</button>
+        <button role="tab" data-tab="logs">Logs</button>
+      <button role="tab" data-tab="settings">Settings</button>
+    </nav>
+    <div class="top-right">
+      <button id="notify-btn" class="ghost" hidden>Enable notifications</button>
+      <span id="conn" class="conn" title="Connection to backend"><i></i><span>Connecting…</span></span>
+    </div>
+  </header>
+
+  <main>
+    <section id="tab-overview" class="tab">
+      <div class="ov-bar"><button class="link small" id="ov-edit" title="Choose which panels to show and in what order">&#9881; Customize</button></div>
+      <div class="panel" id="ov-editor" hidden></div>
+
+      <div class="panel" id="map-panel" hidden>
+        <div class="panel-head"><h2 id="map-title">Where it connects</h2><span class="muted small" id="trace-info"></span></div>
+        <div id="map"></div>
+        <ol class="hops small" id="hops"></ol>
+      </div>
+
+      <div class="ov-grid" id="ov-grid">
+        <div class="ov-item ov-wide" data-ov="cards" data-label="Summary cards">
+          <div class="cards" id="cards"></div>
+          <div class="okbar" id="okbar"></div>
+        </div>
+        <div class="panel ov-item" data-ov="speed" data-label="Internet speed">
+          <div class="panel-head"><h2>Internet speed</h2><button class="ghost" id="speed-now">Test now</button></div>
+          <div id="speed"></div>
+        </div>
+        <div class="panel ov-item" data-ov="calls" data-label="Call quality">
+          <div class="panel-head"><h2>Call quality</h2><span class="muted small" id="calls-sub"></span></div>
+          <div id="calls"></div>
+        </div>
+        <div class="panel ov-item" data-ov="bandwidth" data-label="Using bandwidth now">
+          <div class="panel-head"><h2>Using bandwidth now</h2><span class="muted" id="top-total"></span></div>
+          <ul class="top-devs" id="top-devs"></ul>
+        </div>
+        <div class="panel ov-item" data-ov="programs" data-label="Programs on the server">
+          <div class="panel-head"><h2>Programs on the server using the internet</h2><span class="muted" id="hf-sub"></span></div>
+          <ul class="top-devs" id="hostflows"></ul>
+        </div>
+        <div class="panel ov-item" data-ov="usage" data-label="Data usage">
+          <div class="panel-head"><h2>Data usage <span class="muted small">speed now · last 5 min · 24 h</span></h2><button class="link" data-goto="devices">All devices</button></div>
+          <ul class="top-devs" id="usage"></ul>
+        </div>
+        <div class="panel ov-item ov-wide" data-ov="response" data-label="Response times">
+          <div class="panel-head">
+            <h2>Response times</h2>
+            <div class="seg" id="range">
+              <button data-min="60" aria-pressed="true">1 h</button>
+              <button data-min="360">6 h</button>
+              <button data-min="1440">24 h</button>
+              <button data-min="10080">7 d</button>
+            </div>
+          </div>
+          <div id="chart" class="chart"></div>
+          <div id="legend" class="legend"></div>
+        </div>
+        <details class="panel ov-item" id="targets-panel" data-ov="targets" data-label="Targets">
+          <summary class="panel-head"><h2>Targets <span id="targets-sum" class="muted"></span></h2></summary>
+          <div class="table-wrap">
+            <table class="targets">
+              <thead><tr><th>Name</th><th>Address</th><th class="num">Now</th><th class="num">Median</th><th class="num">Loss</th><th>Status</th></tr></thead>
+              <tbody id="targets"></tbody>
+            </table>
+          </div>
+        </details>
+        <div class="panel ov-item" data-ov="events" data-label="Recent events">
+          <div class="panel-head"><h2>Recent events</h2><button class="link" data-goto="events">Show all</button></div>
+          <ul class="events" id="recent-events"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-events" class="tab" hidden>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Events</h2>
+          <div class="seg" id="ev-filter">
+            <button data-cat="" aria-pressed="true">All</button>
+            <button data-cat="security">Security</button>
+            <button data-cat="disruption">Disruption</button>
+            <button data-cat="presence">Presence</button>
+            <button data-cat="system">System</button>
+          </div>
+        </div>
+        <ul class="events" id="events"></ul>
+      </div>
+    </section>
+
+    <section id="tab-devices" class="tab" hidden>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Devices <span id="dev-count" class="muted"></span></h2>
+          <div class="head-tools">
+            <div class="seg" id="dev-filter">
+              <button data-f="all" aria-pressed="true">All</button>
+              <button data-f="new">Not approved</button>
+              <button data-f="online">Online</button>
+            </div>
+            <input id="dev-search" type="search" placeholder="Search name, IP, MAC…" aria-label="Search devices">
+            <button class="ghost" id="dev-cols-btn" aria-expanded="false">Columns</button>
+          </div>
+        </div>
+        <div id="dev-cols" class="dev-cols" hidden></div>
+        <div id="dev-banner"></div>
+        <div class="table-wrap">
+          <table class="devices">
+            <thead><tr id="dev-head"></tr></thead>
+            <tbody id="devices"></tbody>
+          </table>
+        </div>
+        <div class="dev-legend" id="dev-legend"></div>
+        <div class="panel-foot">
+          <button class="ghost" id="dev-scan">Scan now</button>
+          <button class="ghost" id="dev-trust-all" hidden>Approve all</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings" class="tab" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>Notifications</h2></div>
+        <div id="push-panel" class="settings"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>What to notify about</h2><span class="muted small">same for all your phones and computers</span></div>
+        <div id="notif-prefs"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>DNS filter rules</h2><span class="muted small">your own block/allow rules · add more from a device's Contacts list</span></div>
+        <div id="adg-rules"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Modules</h2><span class="muted small">support for your routers and services</span></div>
+        <div id="mod-home"><div id="mod-panel" class="mods"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>General</h2></div>
+        <div id="cfg-panel"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Account</h2></div>
+        <div id="account-panel"></div>
+      </div>
+    </section>
+
+    <section id="tab-security" class="tab" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>Protection</h2><button class="ghost" id="sec-check">Check now</button></div>
+        <div id="sec-panel" class="settings"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Router check</h2></div>
+        <div id="audit-panel" class="settings"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Exposure</h2><button class="ghost" id="scan-ports">Scan ports now</button></div>
+        <div id="expo-panel" class="settings"></div>
+      </div>
+    </section>
+
+    <section id="tab-logs" class="tab" hidden>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Router logs</h2>
+          <input id="log-search" type="search" placeholder="Filter…" aria-label="Filter logs">
+        </div>
+        <div id="log-help" class="help"></div>
+        <div class="logs" id="logs"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

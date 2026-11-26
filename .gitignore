@@ -1,0 +1,19 @@
+# Runtime data, secrets and local config
+data/
+config.toml
+*.db
+*.pem
+*_password.txt
+*_user.txt
+
+# Personal deployment scripts (not part of the project)
+scripts/deploy.ps1
+scripts/add-deploy-key.ps1
+
+# Build output and environments
+dist/
+build/
+.venv/
+__pycache__/
+*.pyc
+.claude/

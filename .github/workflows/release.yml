@@ -1,0 +1,48 @@
+name: Release
+
+# Push a tag like v1.2.3 to build NetMaster-Setup.exe and NetMaster.zip and publish them as a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          "version=$v" >> $env:GITHUB_OUTPUT
+          (Get-Content netmaster/__init__.py) -replace '__version__ = ".*"', "__version__ = `"$v`"" |
+            Set-Content netmaster/__init__.py -Encoding utf8
+      - name: NetMaster.zip
+        shell: pwsh
+        run: |
+          $stage = "build/zip"
+          New-Item -ItemType Directory -Force $stage, dist | Out-Null
+          Copy-Item netmaster, web, scripts -Destination $stage -Recurse
+          Copy-Item requirements.txt, README.md, LICENSE -Destination $stage
+          New-Item -ItemType Directory -Force "$stage/installer" | Out-Null
+          Copy-Item installer/netmaster.ico "$stage/installer"
+          Get-ChildItem $stage -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath dist/NetMaster.zip
+      - name: NetMaster-Setup.exe
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=${{ steps.v.outputs.version }}" installer/netmaster.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/NetMaster-Setup.exe
+            dist/NetMaster.zip
+          generate_release_notes: true

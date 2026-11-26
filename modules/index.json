@@ -1,0 +1,82 @@
+{
+  "modules": [
+    {
+      "id": "adguard",
+      "name": "AdGuard Home",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Shows which sites each device looks up and what was blocked, alerts about malware sites, mining pools and random-looking domains, and lets you block or allow sites per device or for everyone. Works with AdGuard Home and its Home Assistant add-on.",
+      "provides": [
+        "dns"
+      ],
+      "requires": [],
+      "sha256": {
+        "module.json": "cd92eb52138a882130bd38c9980f33909e8da7a4ee8098e3743092ec89d0fb2a",
+        "module.py": "f199fba77dfd92ba8c1f90ca1f64143b674b3107f4249282cbeeed536145a283"
+      }
+    },
+    {
+      "id": "home_assistant",
+      "name": "Home Assistant",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Alerts when Home Assistant stops answering, shows its version and pending updates, and makes sure its computer can never be paused (it often runs your DNS filter or smart home).",
+      "provides": [
+        "service"
+      ],
+      "requires": [],
+      "sha256": {
+        "module.json": "94836796e768bc2b2767170f9a975358c1f57ef3f0862180a02beb3a8a49b1a8",
+        "module.py": "6ae4fc8e0c00635364485f71cbc9a46e242a633a710fd1624c4527f3c9237580"
+      }
+    },
+    {
+      "id": "jellyfin",
+      "name": "Jellyfin",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Alerts when your Jellyfin media server stops answering, and shows who is streaming right now (useful when the network feels slow).",
+      "provides": [
+        "service"
+      ],
+      "requires": [],
+      "sha256": {
+        "module.json": "186c648f59f66bc2fdcb981bb0580f959f836f725f843b8c0159552e08b4c82a",
+        "module.py": "051bfe2dc203015fd294219b7770c78c5b3dfacf148310f75ddb130ec07a491f"
+      }
+    },
+    {
+      "id": "netgear_log",
+      "name": "NETGEAR router log",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Reads the log from a NETGEAR router or access point that cannot send syslog (tested with R6850). Alerts when it restarts. NETGEAR only lets one admin in at a time, so it never logs out someone who is already logged in.",
+      "provides": [
+        "logs"
+      ],
+      "requires": [],
+      "sha256": {
+        "module.json": "b1323f2fdfb3622363cd08249c91548a0bd4c9b33d59d93b7393e5260dfab909",
+        "module.py": "fa551e9209423f60026dfad438df51d7d18b6b3af4551e53f5c6ddcba009ab64"
+      }
+    },
+    {
+      "id": "tplink_router",
+      "name": "TP-Link router",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Reads the system log, connected clients and live traffic from a TP-Link router (Archer and Deco models supported by tplinkrouterc6u). Adds a security check of the router's settings and lets you pause a device's internet. Never logs you out: if you are logged in to the router's web page, it waits.",
+      "provides": [
+        "router",
+        "logs"
+      ],
+      "requires": [
+        "tplinkrouterc6u>=5.0"
+      ],
+      "sha256": {
+        "module.json": "c6166a9224cd05cfd128a5a88c316d9d514e2832c9ecbe2600f0326f2902bd7b",
+        "module.py": "d870c5be6ed52b0e3d317fd201913ae06f1deac85772529a968495097cb1dac3"
+      }
+    }
+  ]
+}

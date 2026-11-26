@@ -1,0 +1,16 @@
+{
+  "id": "netgear_log",
+  "name": "NETGEAR router log",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Reads the log from a NETGEAR router or access point that cannot send syslog (tested with R6850). Alerts when it restarts. NETGEAR only lets one admin in at a time, so it never logs out someone who is already logged in.",
+  "provides": ["logs"],
+  "requires": [],
+  "files": ["module.py"],
+  "settings": [
+    {"key": "host", "label": "Router IP address", "type": "text", "default": ""},
+    {"key": "username", "label": "Username", "type": "text", "default": "admin"},
+    {"key": "password", "label": "Password", "type": "password"},
+    {"key": "interval_s", "label": "Read every (seconds)", "type": "number", "default": 300}
+  ]
+}

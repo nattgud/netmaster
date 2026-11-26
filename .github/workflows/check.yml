@@ -1,0 +1,46 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install requirements
+        run: python -m pip install -r requirements.txt
+      - name: Python compiles
+        run: python -m compileall -q netmaster scripts modules
+      - name: JavaScript parses
+        run: |
+          node --check web/app.js
+          node --check web/i18n.js
+          node --check web/sw.js
+      - name: Translations have 7 columns
+        shell: python
+        run: |
+          rows = open("web/i18n/strings.tsv", encoding="utf-8").read().splitlines()
+          bad = [i + 1 for i, r in enumerate(rows) if r and len(r.split("\t")) != 7]
+          assert not bad, f"wrong column count on lines {bad}"
+      - name: Module index is up to date
+        run: |
+          python scripts/build_module_index.py
+          git diff --exit-code modules/index.json
+      - name: PowerShell scripts parse
+        shell: pwsh
+        run: |
+          $bad = 0
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $e = $null; $t = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$t, [ref]$e)
+            if ($e) { $bad++; Write-Host "$($_.Name): $($e[0].Message)" }
+          }
+          exit $bad

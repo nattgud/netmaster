@@ -1,0 +1,17 @@
+{
+  "id": "adguard",
+  "name": "AdGuard Home",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Shows which sites each device looks up and what was blocked, alerts about malware sites, mining pools and random-looking domains, and lets you block or allow sites per device or for everyone. Works with AdGuard Home and its Home Assistant add-on.",
+  "provides": ["dns"],
+  "requires": [],
+  "files": ["module.py"],
+  "settings": [
+    {"key": "url", "label": "AdGuard Home address", "type": "text", "default": "", "help": "For example http://192.168.1.10:3000. For the Home Assistant add-on: https://<home-assistant-ip>:3000"},
+    {"key": "username", "label": "Username", "type": "text", "default": "", "help": "For the Home Assistant add-on: your Home Assistant login."},
+    {"key": "password", "label": "Password", "type": "password"},
+    {"key": "verify_tls", "label": "Check the HTTPS certificate", "type": "bool", "default": true, "help": "Turn off for the Home Assistant add-on, which uses its own certificate."},
+    {"key": "interval_s", "label": "Read every (seconds)", "type": "number", "default": 60}
+  ]
+}

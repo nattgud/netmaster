@@ -1,0 +1,15 @@
+{
+  "id": "jellyfin",
+  "name": "Jellyfin",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Alerts when your Jellyfin media server stops answering, and shows who is streaming right now (useful when the network feels slow).",
+  "provides": ["service"],
+  "requires": [],
+  "files": ["module.py"],
+  "settings": [
+    {"key": "url", "label": "Jellyfin address", "type": "text", "default": "", "help": "For example http://192.168.1.30:8096"},
+    {"key": "api_key", "label": "API key (optional)", "type": "password", "help": "Dashboard → API keys in Jellyfin. Needed to see active streams."},
+    {"key": "interval_s", "label": "Check every (seconds)", "type": "number", "default": 30}
+  ]
+}

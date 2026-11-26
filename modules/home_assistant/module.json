@@ -1,0 +1,16 @@
+{
+  "id": "home_assistant",
+  "name": "Home Assistant",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Alerts when Home Assistant stops answering, shows its version and pending updates, and makes sure its computer can never be paused (it often runs your DNS filter or smart home).",
+  "provides": ["service"],
+  "requires": [],
+  "files": ["module.py"],
+  "settings": [
+    {"key": "url", "label": "Home Assistant address", "type": "text", "default": "", "help": "For example http://192.168.1.20:8123"},
+    {"key": "token", "label": "Long-lived access token (optional)", "type": "password", "help": "Create one under your profile in Home Assistant → Security. Needed for version and updates."},
+    {"key": "protect", "label": "Never allow pausing this device", "type": "bool", "default": true},
+    {"key": "interval_s", "label": "Check every (seconds)", "type": "number", "default": 30}
+  ]
+}

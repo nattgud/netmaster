@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+dnspython>=2.6
+pywebpush>=2.0
+scapy>=2.6
+psutil>=5.9
+pystray>=0.19; sys_platform == "win32"
+Pillow>=10.0; sys_platform == "win32"

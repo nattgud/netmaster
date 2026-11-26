@@ -1,0 +1,16 @@
+{
+  "id": "tplink_router",
+  "name": "TP-Link router",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Reads the system log, connected clients and live traffic from a TP-Link router (Archer and Deco models supported by tplinkrouterc6u). Adds a security check of the router's settings and lets you pause a device's internet. Never logs you out: if you are logged in to the router's web page, it waits.",
+  "provides": ["router", "logs"],
+  "requires": ["tplinkrouterc6u>=5.0"],
+  "files": ["module.py"],
+  "settings": [
+    {"key": "host", "label": "Router IP address", "type": "text", "default": "", "help": "Leave empty to use the main router."},
+    {"key": "username", "label": "Username", "type": "text", "default": "admin"},
+    {"key": "password", "label": "Password", "type": "password", "help": "The password for the router's web page."},
+    {"key": "interval_s", "label": "Read every (seconds)", "type": "number", "default": 10}
+  ]
+}
