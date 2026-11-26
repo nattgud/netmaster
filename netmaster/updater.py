@@ -69,7 +69,19 @@ class Updater:
         self.checked: float | None = None
         self.error: str | None = None
         self.updating: str | None = None  # the version being installed
-        self._told: str | None = None
+
+    # The version we already told the user about, kept across restarts so each version gives one notification.
+    def _told(self) -> str:
+        try:
+            return (self.data_dir / "update_notified.txt").read_text("utf-8").strip()
+        except OSError:
+            return ""
+
+    def _set_told(self, version: str) -> None:
+        try:
+            (self.data_dir / "update_notified.txt").write_text(version, "utf-8")
+        except OSError as e:
+            log.info("Could not save update_notified.txt: %s", e)
 
     # ---------- checking ----------
     def _fetch(self) -> dict:
@@ -93,10 +105,11 @@ class Updater:
             self.error = f"Could not check for updates: {e}"
             log.info("%s", self.error)
         self.checked = time.time()
-        if self.available and self._told != self.latest["version"]:
-            self._told = self.latest["version"]
-            self.events.emit("system", "info", f"NetMaster {self.latest['version']} is available",
-                             f"You have {__version__}. Update under Settings → General.", "netmaster")
+        if self.available and self._told() != self.latest["version"]:
+            self._set_told(self.latest["version"])
+            self.events.emit("system", "notice", f"NetMaster {self.latest['version']} is available",
+                             f"You have {__version__}. Update under Settings → General.", "netmaster",
+                             kind="netmaster_update")
         return self.status()
 
     async def run(self) -> None:

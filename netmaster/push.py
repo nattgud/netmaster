@@ -59,13 +59,18 @@ NOTIF_TYPES = [
     _T("traffic", "Security", "Unusual traffic from a device", "Heavy upload, or activity at night.", r"^Heavy upload from| is active at night", False),
     _T("router_log", "Security", "Alerts from the router logs", "Failed logins, attacks, reboots and similar lines in the router logs.",
        "^(?:" + "|".join(re.escape(r.title) for r in RULES if r.title) + r"|Logs from unknown source)$"),
+    _T("update", "NetMaster", "New NetMaster version", "A newer version of NetMaster is available.",
+       r"^NetMaster \S+ is available$"),
     _T("system", "NetMaster", "Problems with NetMaster itself", "NetMaster cannot read a router, receive logs or find the gateway.", r".", True),
 ]
 
 
+_UPDATE_RX = next(t["rx"] for t in NOTIF_TYPES if t["id"] == "update")
+
+
 def classify(ev: dict) -> str:
     if ev.get("category") == "system":
-        return "system"
+        return "update" if _UPDATE_RX.search(ev["title"]) else "system"
     for t in NOTIF_TYPES[:-1]:
         if t["rx"].search(ev["title"]):
             return t["id"]
@@ -195,6 +200,8 @@ class Push:
             return
         payload = {"title": ev["title"], "body": ev.get("detail") or "", "tag": f"nm-{ev['id']}",
                    "severity": ev["severity"], "url": "./#events"}
+        if classify(ev) == "update":  # open Settings → General at the update box
+            payload["url"] = "./#update"
         prefix = "New program on the server is using the internet: "
         if ev["title"].startswith(prefix):  # open the program on the map straight from the notification
             payload["url"] = "./#proc=" + urllib.parse.quote(ev["title"][len(prefix):])

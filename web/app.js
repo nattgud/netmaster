@@ -1902,7 +1902,32 @@ function renderUpdate(u) {
   }
   if (u.error && !u.updating) html += `<div class="small warn-text">${esc(u.error)}</div>`;
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+  // A small box at the top of the overview while an update is available or being installed.
+  const ov = $('#ov-update');
+  const ovHtml = u.updating
+    ? `<span><b>Updating to ${esc(u.updating)}…</b></span><span class="muted small">This page reloads by itself.</span>`
+    : u.available
+      ? `<span><b>NetMaster ${esc(u.latest)} is available</b></span><span class="muted small">(you have ${esc(u.current)})</span>
+        <button type="button" class="small" data-goto-update>${u.can_update ? 'Update' : 'Show'}</button>`
+      : '';
+  ov.hidden = !ovHtml;
+  if (ov.dataset.html !== ovHtml) { ov.innerHTML = ovHtml; ov.dataset.html = ovHtml; }
 }
+// Settings → General, opened and scrolled to the update box (from the overview box or a notification).
+function gotoUpdate() {
+  showTab('settings');
+  const p = $('.panel[data-fold="general"]');
+  if (p) setFold(p, true);
+  setTimeout(() => $('#update-box').scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+}
+$('#ov-update').addEventListener('click', (e) => { if (e.target.closest('[data-goto-update]')) gotoUpdate(); });
+function updateFromHash() {
+  if (location.hash !== '#update') return;
+  history.replaceState(null, '', location.pathname);
+  gotoUpdate();
+}
+window.addEventListener('hashchange', updateFromHash);
+updateFromHash();
 document.addEventListener('click', async (e) => {
   if (e.target.id === 'update-check') {
     e.target.disabled = true; e.target.textContent = 'Checking…';
