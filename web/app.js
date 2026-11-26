@@ -564,6 +564,11 @@ function dnsHtml(x) {
       state.flt?.domain === r.domain ? `<li class="flt-row">${fltHtml(r.domain)}</li>` : ''}`).join('')}</ul>
     ${!state.dnsAll && x.domains.length > 12 ? `<button class="link small" data-act="dns-all">Show ${x.domains.length - 12} more</button>` : ''}</details>`;
 }
+// The name of an enabled smart-home module (e.g. "Home Assistant"), if any: devices can be shown there.
+function smartHome() {
+  const m = (state.status?.modules || []).find((x) => x.enabled && x.provides.includes('smart_home'));
+  return m ? (m.label || m.name) : '';
+}
 function histRow(d) {
   const h = state.hist?.[d.mac], pr = state.status?.ports, t = state.status?.router?.traffic?.[d.mac];
   const ports = pr?.open?.[d.mac];
@@ -579,6 +584,7 @@ function histRow(d) {
     ${dnsHtml(state.dnsHist?.[d.mac])}
     <div class="hist-actions">
       <button class="ghost small" data-act="watch">${d.watch ? '🔔 Notifying when it comes/goes · turn off' : '🔔 Notify me when it comes online or goes offline'}</button>
+      ${smartHome() ? `<button class="ghost small" data-act="share" title="Adds this device to ${esc(smartHome())} (presence, IP/MAC, top sites and an Internet switch)">${d.share ? `🏠 Shown in ${esc(smartHome())} · remove` : `🏠 Show in ${esc(smartHome())}`}</button>` : ''}
       <button class="ghost small" data-act="wake" title="Wake-on-LAN: turns on a sleeping computer, if it has Wake-on-LAN enabled">⏻ Wake (Wake-on-LAN)</button>
     </div>
     <div class="hist-meta">
@@ -864,7 +870,7 @@ const shortIp = (ip) => {
 
 // Columns in the device table. Which ones show, and in what order, is saved in the browser.
 const DEV_COLS = [
-  { id: 'name', label: 'Name', fixed: true, cell: (d, c) => `<td class="name"><span class="nm${d.name ? '' : ' placeholder'} ${c.on ? 'is-on' : 'is-off'}" data-act="rename" title="Click to rename · ${c.on ? 'online' : 'offline'}">${esc(c.label)}</span>${state.status?.router?.blocked?.includes(d.mac) ? ' <span class="badge bad">Internet paused</span>' : ''}${d.watch ? ' <span class="badge" title="You get a notification when it comes online or goes offline">🔔</span>' : ''}${c.risky.length ? ` <span class="badge bad" title="Risky open ports">${c.risky.map((p) => esc(c.pr.names[p])).join(', ')}</span>` : ''}${c.sub ? `<span class="host">${esc(c.sub)}</span>` : ''}</td>` },
+  { id: 'name', label: 'Name', fixed: true, cell: (d, c) => `<td class="name"><span class="nm${d.name ? '' : ' placeholder'} ${c.on ? 'is-on' : 'is-off'}" data-act="rename" title="Click to rename · ${c.on ? 'online' : 'offline'}">${esc(c.label)}</span>${state.status?.router?.blocked?.includes(d.mac) ? ' <span class="badge bad">Internet paused</span>' : ''}${d.watch ? ' <span class="badge" title="You get a notification when it comes online or goes offline">🔔</span>' : ''}${d.share && smartHome() ? ` <span class="badge" title="Shown in ${esc(smartHome())}">🏠</span>` : ''}${c.risky.length ? ` <span class="badge bad" title="Risky open ports">${c.risky.map((p) => esc(c.pr.names[p])).join(', ')}</span>` : ''}${c.sub ? `<span class="host">${esc(c.sub)}</span>` : ''}</td>` },
   { id: 'ip', label: 'IP', cell: (d, c) => `<td class="mono clickable ${c.on ? 'is-on' : 'is-off'}" data-act="investigate" title="${esc(d.ip)} · Investigate: find out what this device is">${esc(shortIp(d.ip))}</td>` },
   { id: 'vendor', label: 'Vendor', cell: (d) => `<td>${esc(d.vendor || '–')}</td>` },
   { id: 'mac', label: 'MAC', cell: (d) => `<td class="mono">${esc(d.mac)}</td>` },
@@ -1061,6 +1067,12 @@ $('#devices').addEventListener('click', async (e) => {
   if (act === 'watch') {
     const d = state.devices.get(mac);
     state.devices.set(mac, await api(`/api/devices/${mac}`, 'PATCH', { watch: !d.watch }));
+    renderDevices();
+    return;
+  }
+  if (act === 'share') {
+    const d = state.devices.get(mac);
+    state.devices.set(mac, await api(`/api/devices/${mac}`, 'PATCH', { share: !d.share }));
     renderDevices();
     return;
   }

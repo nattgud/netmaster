@@ -193,7 +193,7 @@ class HostFlows:
                          f"New program on the server is using the internet: {info['name']}",
                          f"{info['exe']}\nTalking to {rip}. {sig}"
                          + ("\nRuns from a user/temp folder, which is typical for malware." if odd and warn else ""),
-                         "netmaster")
+                         "netmaster", kind="new_server_program")
 
     async def run(self) -> None:
         while True:

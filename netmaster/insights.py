@@ -72,14 +72,14 @@ class Usage:
                 self.events.emit("security", "notice", f"Heavy upload from {name}",
                                  f"{name} has uploaded over {up * 8 / 1e6:.0f} Mbit/s for "
                                  f"{(ts - since) / 60:.0f} minutes. Fine for backups or streaming, "
-                                 "suspicious for a device that normally doesn't.", mac)
+                                 "suspicious for a device that normally doesn't.", mac, kind="heavy_upload")
         else:
             self._upload_since.pop(mac, None)
         if time.localtime(ts).tm_hour in self.NIGHT_HOURS and down + up >= self.NIGHT_ALERT_BPS \
                 and self._alert_once((mac, "night"), 12 * 3600):
             self.events.emit("security", "info", f"{name} is active at night",
                              f"{(down + up) * 8 / 1e6:.1f} Mbit/s at {time.strftime('%H:%M', time.localtime(ts))}.",
-                             mac)
+                             mac, kind="night_activity")
 
     def totals(self, hours: float) -> list[dict]:
         return self.db.query("SELECT mac, SUM(down) AS down, SUM(up) AS up FROM usage WHERE ts >= ? "
@@ -140,11 +140,11 @@ class PortScanner:
                     for p in set(found) - set(before):
                         self.events.emit("security", "warning" if p in RISKY else "notice",
                                          f"New open port on {name}: {p} ({PORTS[p]})",
-                                         f"{targets[mac]} now accepts connections on port {p}.", mac)
+                                         f"{targets[mac]} now accepts connections on port {p}.", mac, kind="new_open_port")
                 self.open[mac] = found
             if risky_first:
                 self.events.emit("security", "notice", "Risky services found in the network",
-                                 "\n".join(risky_first), "netmaster")
+                                 "\n".join(risky_first), "netmaster", kind="risky_services")
             self.db.set_meta("open_ports", json.dumps(self.open))
             self.last_scan = time.time()
         finally:
@@ -200,10 +200,10 @@ class Exposure:
         new_vulns = set(res["vulns"]) - set(old.get("vulns", []))
         if old and new_ports:
             self.events.emit("security", "warning", "New port visible from the internet",
-                             f"{ip}: {', '.join(map(str, sorted(new_ports)))}", "netmaster")
+                             f"{ip}: {', '.join(map(str, sorted(new_ports)))}", "netmaster", kind="internet_exposed_port")
         if new_vulns:
             self.events.emit("security", "warning", "Known vulnerabilities reported for your public IP",
-                             ", ".join(sorted(new_vulns)[:20]), "netmaster")
+                             ", ".join(sorted(new_vulns)[:20]), "netmaster", kind="vulnerability")
         self.result = res
         self.db.set_meta("exposure", json.dumps(res))
 

@@ -85,6 +85,8 @@ class ModuleManager:
         self.cfg, self.db, self.events, self.syslog, self.inventory, self.net = cfg, db, events, syslog, inventory, net
         self.local_ip = local_ip
         self.usage = self.wifi = None       # insights.Usage / WifiWatch, set by app
+        self.pause_fn = None                # async (mac, paused, via) -> bool, set by app
+        self.protected_fn = lambda: {}      # {mac: reason} for devices that must never be paused, set by app
         self.instances: dict[str, ModuleBase] = {}
         self.tasks: dict[str, asyncio.Task] = {}
         self.load_errors: dict[str, str] = {}
@@ -172,6 +174,7 @@ class ModuleManager:
             t.cancel()
         if inst := self.instances.pop(mid, None):
             try:
+                inst.ctx._close()
                 inst.stop()
             except Exception:
                 log.exception("Module %s failed to stop", mid)

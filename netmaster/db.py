@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS push_subs(
 );
 """
 
-DEVICE_COLS = ("mac", "ip", "hostname", "vendor", "name", "trusted", "randomized", "first_seen", "last_seen", "watch")
+DEVICE_COLS = ("mac", "ip", "hostname", "vendor", "name", "trusted", "randomized", "first_seen", "last_seen", "watch", "share")
 
 
 class Database:
@@ -102,10 +102,12 @@ class Database:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.executescript(SCHEMA)
-        try:  # older databases lack the column for watched devices
-            self._conn.execute("ALTER TABLE devices ADD COLUMN watch INTEGER NOT NULL DEFAULT 0")
-        except sqlite3.OperationalError:
-            pass
+        # Older databases lack these columns: watch (presence alerts), share (shown in smart-home modules)
+        for col in ("watch", "share"):
+            try:
+                self._conn.execute(f"ALTER TABLE devices ADD COLUMN {col} INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
         # Older versions used Swedish category names
         with self._conn:
             for old, new in (("intrång", "security"), ("störning", "disruption"), ("närvaro", "presence")):
@@ -182,7 +184,7 @@ class Database:
         updates = ", ".join(f"{c} = excluded.{c}" for c in DEVICE_COLS if c != "mac")
         with self._lock, self._conn:
             self._conn.execute(f"INSERT INTO devices({cols}) VALUES ({marks}) ON CONFLICT(mac) DO UPDATE SET {updates}",
-                               tuple(int(bool(d.get(c))) if c == "watch" else d.get(c) for c in DEVICE_COLS))
+                               tuple(int(bool(d.get(c))) if c in ("watch", "share") else d.get(c) for c in DEVICE_COLS))
 
     def device_delete(self, mac: str) -> None:
         with self._lock, self._conn:

@@ -77,7 +77,7 @@ class SyslogServer:
                 self.events.emit("system", "info", f"Receiving logs from {name}", host, host)
             else:
                 self.events.emit("security", "notice", "Logs from unknown source",
-                                 f"{host} sends syslog but is not listed under [routers] in config.toml.", host)
+                                 f"{host} sends syslog but is not listed under [routers] in config.toml.", host, kind="unknown_log_source")
         src["count"] += 1
         src["last_seen"] = ts
 
@@ -105,7 +105,8 @@ class SyslogServer:
         ips = [ip for ip in rules.extract_ips(msg) if ip != host]
         if ips and rule.category == "security":
             detail += f"\nAddresses involved: {', '.join(ips)}"
-        self.events.emit(rule.category, rule.severity, rule.title, detail, host)
+        kind = "router_" + rule.id.removeprefix("ax_") if rule.category == "security" else ""
+        self.events.emit(rule.category, rule.severity, rule.title, detail, host, kind=kind)
 
     def status(self) -> dict:
         return {"port": self.cfg.syslog_port, "listening": self.transport is not None,

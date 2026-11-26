@@ -34,7 +34,7 @@ modules/my_router/
 }
 ```
 
-- `provides`: what the module adds. `logs`, `router`, `dns` or `service` (see below).
+- `provides`: what the module adds. `logs`, `router`, `dns`, `service` or `smart_home` (see below).
 - `requires`: pip packages, installed into NetMaster's Python environment when the module is installed.
 - `files`: the files to download. `module.py` must define a class called `Module`.
 - `settings`: the form the user fills in. Types: `text`, `password`, `number`, `bool`. Passwords are stored apart from other settings and never sent back to the browser.
@@ -77,7 +77,10 @@ Blocking work (HTTP, sockets, libraries without async) goes through `await self.
 | `router_name(ip)` | the name the user gave a router |
 | `add_log(line, host)` | add a router log line (it goes through the same rules as syslog) |
 | `report_clients([...])` | connected clients and their traffic (for `router` modules) |
-| `emit(...)` | raise an event/alert |
+| `emit(category, severity, title, detail, key, kind)` | raise an event/alert. `kind` is a fixed id for the alert type (for automations) |
+| `subscribe_events()` | an asyncio queue with every new event, including its `kind` |
+| `traffic(mac)`, `top_domains(ip, hours, n)` | live traffic from the router module, most looked-up sites from the DNS module |
+| `can_pause`, `paused()`, `protected()`, `await pause(mac, on)` | pause internet for a device through the router module (protected devices are refused) |
 | `to_thread(fn, ...)`, `sleep(s)` | run blocking code, wait |
 | `db`, `cfg`, `data_dir`, `log` | database, NetMaster settings (read only), a private folder, a logger |
 
@@ -88,6 +91,7 @@ Helpers in `netmaster.sdk`: `http_get(url, headers, timeout, verify_tls)` return
 - `logs`: call `ctx.add_log(...)` for each line.
 - `router`: call `ctx.report_clients(...)`. Optional: `self.blocked`, `self.audit`, `self.public_ip`, and `block(mac, on, name)` for the "pause internet" button.
 - `dns`: a DNS filter. Implement `top(hours)` and `device(ip, hours)`, optionally `rules()`, `add_rule(...)`, `remove_rule(...)`.
+- `smart_home`: shares data with a smart-home system. Devices the user ticked "Show in ..." have `share` set in `ctx.devices()`. See [`ha_mqtt`](ha_mqtt/module.py).
 - `service`: return `{"service": self.watch.status()}` from `status()` to show up in the Services panel.
 
 Any module can also define `protect() -> {ip: reason}` for devices that must never be paused.

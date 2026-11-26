@@ -24,12 +24,12 @@ class _Alerts:
         self.events = events
         self._sent: dict[tuple, float] = {}
 
-    def alert(self, key, category, severity, title, detail, source, every=REALERT_S) -> None:
+    def alert(self, key, category, severity, title, detail, source, every=REALERT_S, kind="") -> None:
         now = time.time()
         if now - self._sent.get(key, 0) < every:
             return
         self._sent[key] = now
-        self.events.emit(category, severity, title, detail, source)
+        self.events.emit(category, severity, title, detail, source, kind=kind)
 
     def clear(self, prefix) -> None:
         self._sent = {k: v for k, v in self._sent.items() if k[0] != prefix}
@@ -98,7 +98,7 @@ class DhcpGuard:
                   "A rogue DHCP server can redirect all traffic. Common cause: a router plugged in "
                   "without being in access point mode.")
         detail += f" Detected via {source}."
-        self.alerts.alert(("dhcp", sid), "security", "critical", "Unknown DHCP server on the network", detail, sid)
+        self.alerts.alert(("dhcp", sid), "security", "critical", "Unknown DHCP server on the network", detail, sid, kind="rogue_dhcp")
 
     def status(self) -> dict:
         return {"enabled": self.l2.available, "last_check": self.last_check, "allowed": sorted(self.allowed),
@@ -151,7 +151,7 @@ class DnsGuard:
                     self.alerts.alert(("dns", server, name), "security", "critical", "DNS answers are tampered",
                                       f"{server} answers {', '.join(sorted(got))} for {name}, but the correct answer is "
                                       f"{', '.join(sorted(expected))}. Someone may be redirecting your traffic to fake sites. "
-                                      "Check the router DNS settings and change the router admin password.", server)
+                                      "Check the router DNS settings and change the router admin password.", server, kind="dns_tampered")
 
         # 2. Made-up names must not exist (otherwise someone redirects mistyped addresses)
         if gw:
@@ -160,7 +160,7 @@ class DnsGuard:
             if redirect and not self.nx_redirect:
                 self.alerts.alert(("nx",), "security", "notice", "Router DNS redirects non-existent names",
                                   f"A made-up name resolved to {', '.join(sorted(got))}. Often an ISP feature, "
-                                  "but it can also be tampering.", gw, every=86400)
+                                  "but it can also be tampering.", gw, every=86400, kind="dns_redirects_nx")
             self.nx_redirect = redirect
 
         # 3. The computer's own DNS servers must not change silently (e.g. via rogue DHCP)
@@ -174,7 +174,7 @@ class DnsGuard:
                 self.db.set_meta("system_dns", cur_s)
                 self.events.emit("security", "warning", "Server DNS servers have changed",
                                  f"From {learned} to {cur_s}. If you did not change this yourself, it may "
-                                 "indicate a rogue DHCP server.", "dns")
+                                 "indicate a rogue DHCP server.", "dns", kind="dns_servers_changed")
             self.system_dns = current
 
         self.problems = problems

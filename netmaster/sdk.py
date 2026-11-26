@@ -33,6 +33,9 @@ What a module can provide (module.json "provides"), and the methods/attributes t
                 device(ip, hours) -> {"domains": [...], "total": n, "blocked": n, "distinct": n}
                 Optional: rules(), add_rule(domain, action, client_ip), remove_rule(rule), protect() -> {ip: reason}
 
+    "smart_home" - shares devices the user picked ("Show in ...", devices()[mac]["share"]) with a smart-home
+                system. Use subscribe_events(), traffic(), top_domains(), paused() and pause(mac, on).
+
 Any module may also return {"service": ServiceWatch(...).status()} from status() to show up in the
 Services panel, and protect() -> {ip: reason} for devices that must never be paused.
 
@@ -61,6 +64,7 @@ class Context:
         self.log = logging.getLogger(f"netmaster.module.{module_id}")
         self.db = manager.db              # Database: query(sql, args), execute(sql, rows), get_meta/set_meta
         self.cfg = manager.cfg            # NetMaster's settings (read only)
+        self._listeners: list = []
 
     # --- the network ---
     @property
@@ -89,10 +93,74 @@ class Context:
                 return mac, d.get("name") or d.get("hostname") or d.get("vendor") or ip
         return ip, ip
 
+    def traffic(self, mac: str) -> dict | None:
+        """Live traffic for a device from the router module: {"down", "up" (bytes/s), "usage", "signal", "ssid", "conn"}."""
+        return self._m.traffic.get(mac)
+
+    def top_domains(self, ip: str, hours: float = 24, n: int = 3) -> list[dict] | None:
+        """The sites a device looked up most, from the DNS filter module: [{"domain", "n", "blocked"}].
+        None when no DNS filter module runs. Blocking: call it with to_thread."""
+        d = self._m.provider("dns")
+        if not d or not ip:
+            return None
+        return (d.device(ip, hours).get("domains") or [])[:n]
+
+    # --- pausing internet for a device ---
+    @property
+    def can_pause(self) -> bool:
+        """True when a router module that can pause devices is running."""
+        r = self._m.provider("router")
+        return bool(r and hasattr(r, "block") and self._m.pause_fn)
+
+    def paused(self) -> set[str]:
+        """MAC addresses whose internet is paused right now."""
+        r = self._m.provider("router")
+        return set(getattr(r, "blocked", None) or []) if r else set()
+
+    def protected(self) -> dict[str, str]:
+        """{mac: reason} for devices that can never be paused (the router, the NetMaster server ...)."""
+        return self._m.protected_fn()
+
+    async def pause(self, mac: str, paused: bool) -> bool:
+        """Pause or resume internet for a device. Returns whether it is paused now.
+        Raises an exception with a readable message when it is not allowed or the router refuses."""
+        if not self._m.pause_fn:
+            raise RuntimeError("Pausing is not available")
+        return await self._m.pause_fn(mac.lower(), paused, self._m.installed().get(self.id, {}).get("name", self.id))
+
+    # --- events ---
+    def subscribe_events(self, maxsize: int = 500) -> asyncio.Queue:
+        """A queue that gets every new event as a dict: {"id", "ts", "category", "severity", "title", "detail",
+        "source", "kind"}. Call it from run(). It stops when the module stops."""
+        loop = asyncio.get_running_loop()
+        q: asyncio.Queue = asyncio.Queue(maxsize=maxsize)
+
+        def put(ev):
+            try:
+                q.put_nowait(ev)
+            except asyncio.QueueFull:
+                pass
+
+        def listener(ev):
+            loop.call_soon_threadsafe(put, dict(ev))
+
+        self._m.events.listeners.append(listener)
+        self._listeners.append(listener)
+        return q
+
+    def _close(self) -> None:
+        for fn in self._listeners:
+            try:
+                self._m.events.listeners.remove(fn)
+            except ValueError:
+                pass
+        self._listeners.clear()
+
     # --- reporting ---
-    def emit(self, category: str, severity: str, title: str, detail: str = "", key: str = "") -> None:
-        """An event. category: security|disruption|presence|system. severity: info|notice|warning|critical."""
-        self._m.events.emit(category, severity, title, detail, key or self.id)
+    def emit(self, category: str, severity: str, title: str, detail: str = "", key: str = "", kind: str = "") -> None:
+        """An event. category: security|disruption|presence|system. severity: info|notice|warning|critical.
+        kind: a fixed id for the type of alert (lowercase, _), used by automations such as Home Assistant."""
+        self._m.events.emit(category, severity, title, detail, key or self.id, kind=kind)
 
     def add_log(self, line: str, host: str, alarm: bool = True, ts: float | None = None) -> None:
         """One log line from a device. alarm=False stores it without raising alerts (use for old history)."""

@@ -157,7 +157,7 @@ class Inventory:
                     detail += f" The same MAC is used by {', '.join(claimed)} – that device is probably impersonating the router."
                 detail += (f" Source: {source}. Did you replace the main router? Accept the new one under Settings.")
                 self._alert(("gw", mac), "security", "critical", "Possible ARP spoofing: router MAC has changed",
-                            detail, ip)
+                            detail, ip, kind="arp_spoofing")
 
         prev = self._ip_mac.get(ip)
         if prev and prev != mac:
@@ -166,15 +166,16 @@ class Inventory:
             recent = [t for t in q if now - t < 600]
             if len(recent) >= 3 and ip != self.gateway_ip:
                 self._alert(("flap", ip), "security", "warning", f"{ip} keeps changing MAC address",
-                            f"Latest {prev} → {mac}. May be an IP conflict or ARP spoofing.", ip)
+                            f"Latest {prev} → {mac}. May be an IP conflict or ARP spoofing.", ip, kind="mac_flapping")
         self._ip_mac[ip] = mac
 
-    def _alert(self, key: tuple, category: str, severity: str, title: str, detail: str, source: str) -> None:
+    def _alert(self, key: tuple, category: str, severity: str, title: str, detail: str, source: str,
+               kind: str = "") -> None:
         now = time.time()
         if now - self._alerted.get(key, 0) < REALERT_S:
             return
         self._alerted[key] = now
-        self.events.emit(category, severity, title, detail, source)
+        self.events.emit(category, severity, title, detail, source, kind=kind)
 
     def observe(self, ip: str, mac: str, source: str, hostname: str | None = None, name: str | None = None) -> None:
         now = time.time()
@@ -187,7 +188,7 @@ class Inventory:
             self.devices[mac] = d
             self._save(d)
             if not d["trusted"]:
-                self.events.emit("security", "warning", "New device on the network", self.describe(d), ip)
+                self.events.emit("security", "warning", "New device on the network", self.describe(d), ip, kind="new_device")
             if not hostname and self.gateway_ip:
                 asyncio.get_running_loop().create_task(self._resolve_name(mac))
             return
@@ -237,10 +238,12 @@ class Inventory:
 
     # ---------- user actions ----------
     def update(self, mac: str, name: str | None = None, trusted: bool | None = None,
-               watch: bool | None = None) -> dict | None:
+               watch: bool | None = None, share: bool | None = None) -> dict | None:
         d = self.devices.get(mac)
         if not d:
             return None
+        if share is not None:
+            d["share"] = int(share)
         if watch is not None:
             d["watch"] = int(watch)
             self._present[mac] = self._online(d)

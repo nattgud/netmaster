@@ -83,6 +83,8 @@ async def lifespan(app: FastAPI):
     s.modules = await asyncio.to_thread(ModuleManager, cfg, db, events, syslog, inventory, net,
                                         lambda: s.hostflows.local_ip)
     from .insights import Exposure, PortScanner, Services, SpeedTest, Usage, WifiWatch
+    s.modules.pause_fn = lambda mac, on, via: set_paused(s, mac, on, via)
+    s.modules.protected_fn = lambda: _protected(s)
     s.usage = s.modules.usage = Usage(db, events, inventory)
     s.wifi = s.modules.wifi = WifiWatch(db, events, inventory)
     s.calls = CallQuality(net, events, s.modules.load_mbps, db)
@@ -183,10 +185,11 @@ def devices(request: Request):
 def update_device(request: Request, mac: str, body: dict = Body(...)):
     name = body.get("name")
     trusted = body.get("trusted")
-    watch = body.get("watch")
+    watch, share = body.get("watch"), body.get("share")
     d = request.app.state.inventory.update(mac.lower(), name=name if isinstance(name, str) else None,
                                            trusted=bool(trusted) if trusted is not None else None,
-                                           watch=bool(watch) if watch is not None else None)
+                                           watch=bool(watch) if watch is not None else None,
+                                           share=bool(share) if share is not None else None)
     if not d:
         raise HTTPException(404, "Unknown device")
     return d
@@ -316,29 +319,43 @@ def _protected(s) -> dict[str, str]:
     return {mac: ips[d["ip"]] for mac, d in s.inventory.devices.items() if d.get("ip") in ips and d["ip"]}
 
 
-@app.post("/api/devices/{mac}/block")
-async def block_device(request: Request, mac: str, body: dict = Body(...)):
+class PauseError(Exception):
+    def __init__(self, status: int, msg: str):
+        super().__init__(msg)
+        self.status = status
+
+
+async def set_paused(s, mac: str, paused: bool, via: str = "NetMaster") -> bool:
+    """Pauses or resumes internet for a device through the router module. Returns whether it is paused now.
+    Used by the app and by modules (ctx.pause). Raises PauseError with an HTTP-like status."""
     from .sdk import Busy
-    s = request.app.state
-    d = s.inventory.devices.get(mac.lower())
+    mac = mac.lower()
+    d = s.inventory.devices.get(mac)
     if not d:
-        raise HTTPException(404, "Unknown device")
-    if body.get("blocked") and (why := _protected(s).get(mac.lower())):
-        raise HTTPException(403, f"This is {why}. Pausing it would lock up the network, so it is not allowed.")
+        raise PauseError(404, "Unknown device")
+    if paused and (why := _protected(s).get(mac)):
+        raise PauseError(403, f"This is {why}. Pausing it would lock up the network, so it is not allowed.")
     router = s.modules.provider("router")
     if not router or not hasattr(router, "block"):
-        raise HTTPException(400, "No router module that can pause devices is set up")
+        raise PauseError(400, "No router module that can pause devices is set up")
     try:
-        blocked = await asyncio.to_thread(router.block, mac.lower(), bool(body.get("blocked")),
-                                          d.get("name") or d.get("hostname") or "")
+        blocked = await asyncio.to_thread(router.block, mac, bool(paused), d.get("name") or d.get("hostname") or "")
     except Busy:
-        raise HTTPException(409, "Someone is logged in to the router's web page. Log out there and try again.")
+        raise PauseError(409, "Someone is logged in to the router's web page. Log out there and try again.")
     except Exception as e:
-        raise HTTPException(502, f"The router refused: {e}")
-    on = mac.lower() in blocked
+        raise PauseError(502, f"The router refused: {e}")
+    on = mac in blocked
     s.events.emit("system", "info", f"Internet {'paused' if on else 'resumed'} for {d.get('name') or d.get('hostname') or mac}",
-                  "Changed from NetMaster.", mac.lower())
-    return {"blocked": on}
+                  f"Changed from {via}.", mac)
+    return on
+
+
+@app.post("/api/devices/{mac}/block")
+async def block_device(request: Request, mac: str, body: dict = Body(...)):
+    try:
+        return {"blocked": await set_paused(request.app.state, mac, bool(body.get("blocked")))}
+    except PauseError as e:
+        raise HTTPException(e.status, str(e))
 
 
 @app.post("/api/devices/{mac}/wake")

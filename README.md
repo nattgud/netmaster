@@ -20,6 +20,7 @@ NetMaster watches your home network for **disruptions** and **intruders**, and a
 | Router logs | Optional syslog receiver that turns logins, attacks, WAN drops, reboots and changed settings into events. |
 | Notifications | Web Push to phones and computers, even when the app is closed. Every kind can be turned on or off. |
 | Modules | Support for specific routers and services (TP-Link, NETGEAR, AdGuard Home, Home Assistant, Jellyfin ...) is installed from a built-in marketplace. See [modules/README.md](modules/README.md). |
+| Home Assistant | The *Home Assistant (MQTT)* module sends security alerts (one fixed `event_type` per alert type, plus device triggers for the automation editor), the number of unknown devices, and the devices you pick (presence, IP, MAC, top 3 sites and an Internet pause switch) through your MQTT broker. |
 
 The app is in English, Swedish, Chinese, Hindi, Spanish, Arabic and French (Settings → Account → Language).
 

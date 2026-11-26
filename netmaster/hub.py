@@ -36,17 +36,19 @@ class EventService:
     def __init__(self, db, hub: Hub) -> None:
         self.db = db
         self.hub = hub
-        self.listeners: list = []  # t.ex. push-notiser
+        self.listeners: list = []  # e.g. push notifications, modules
 
-    def emit(self, category: str, severity: str, title: str, detail: str = "", source: str = "") -> dict:
+    def emit(self, category: str, severity: str, title: str, detail: str = "", source: str = "",
+             kind: str = "") -> dict:
+        """kind: a fixed id for the type of alert (e.g. "arp_spoofing"), for automations. Titles may change."""
         ts = time.time()
         eid = self.db.insert_event(ts, category, severity, title, detail, source)
         ev = {"id": eid, "ts": ts, "category": category, "severity": severity,
-              "title": title, "detail": detail, "source": source}
+              "title": title, "detail": detail, "source": source, "kind": kind}
         self.hub.publish("event", ev)
         for listener in self.listeners:
             try:
                 listener(ev)
             except Exception:
-                logging.getLogger("netmaster.events").exception("Lyssnare misslyckades")
+                logging.getLogger("netmaster.events").exception("Event listener failed")
         return ev

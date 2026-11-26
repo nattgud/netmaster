@@ -1,0 +1,20 @@
+{
+  "id": "ha_mqtt",
+  "name": "Home Assistant (MQTT)",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Sends security alerts (with a fixed type per alert, ready for automations), the number of unknown devices, and the devices you pick (presence, IP, MAC, top sites and an Internet pause switch) to Home Assistant through your MQTT broker. Home Assistant finds everything by itself (MQTT discovery).",
+  "provides": ["smart_home"],
+  "requires": ["paho-mqtt>=2.0"],
+  "files": ["module.py"],
+  "settings": [
+    {"key": "host", "label": "MQTT broker address", "type": "text", "default": "", "help": "The IP or name of your broker, for example the Home Assistant computer when you use the Mosquitto add-on."},
+    {"key": "port", "label": "Port", "type": "number", "default": 1883, "help": "1883, or usually 8883 with TLS."},
+    {"key": "username", "label": "Username", "type": "text", "default": ""},
+    {"key": "password", "label": "Password", "type": "password"},
+    {"key": "tls", "label": "Use TLS", "type": "bool", "default": false},
+    {"key": "discovery_prefix", "label": "Home Assistant discovery prefix", "type": "text", "default": "homeassistant", "help": "Only change this if you changed it in Home Assistant."},
+    {"key": "topic_prefix", "label": "Topic prefix", "type": "text", "default": "netmaster", "help": "Where NetMaster publishes its own topics."},
+    {"key": "interval_s", "label": "Update every (seconds)", "type": "number", "default": 30}
+  ]
+}
