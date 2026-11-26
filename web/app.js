@@ -1404,16 +1404,29 @@ function muteRules(e) {
   return (state.notif?.muted || []).filter((r) => (!r.title || r.title === key) && (!r.type || r.type === e.ntype)
     && (!r.device || (ids ||= evIds(e)).has(r.device)));
 }
+// How wide a mute is, shown with its own icon, colour and word so it is clear without hovering.
+const MUTE_LEVELS = {
+  one: { icon: '🔕', label: 'Only this' },          // one kind of message (rule with title)
+  devtype: { icon: '📱', label: 'Kind on device' }, // one notification type from one device
+  device: { icon: '📵', label: 'Whole device' },    // everything from one device
+  type: { icon: '🚫', label: 'Whole type' },        // a notification type from every device
+};
+const ruleLevel = (r) => (r.off || (r.type && !r.device && !r.title) ? 'type' : r.title ? 'one' : r.type ? 'devtype' : 'device');
+const levelBadge = (lvl) => `<span class="mute-lvl lvl-${lvl}">${MUTE_LEVELS[lvl].icon} <span>${MUTE_LEVELS[lvl].label}</span></span>`;
 function muteReason(e) {
   if (!state.notif) return null;
-  if (e.ntype && typeInfo(e.ntype)?.on === false) return { off: e.ntype, text: `"${typeInfo(e.ntype).label}" is turned off` };
+  if (e.ntype && typeInfo(e.ntype)?.on === false) return { off: e.ntype, level: 'type', text: `"${typeInfo(e.ntype).label}" is turned off` };
   const rules = muteRules(e);
-  return rules.length ? { rules, text: ruleText(rules[0]) } : null;  // turning on again removes all matching rules
+  if (!rules.length) return null;
+  // the widest matching rule decides the mark; turning on again removes all matching rules
+  const order = ['type', 'device', 'devtype', 'one'], level = order.find((l) => rules.some((r) => ruleLevel(r) === l));
+  const main = rules.find((r) => ruleLevel(r) === level);
+  return { rules, level, text: ruleText(main) };
 }
 function muteMark(e) {
   const why = muteReason(e);
   return why
-    ? ` <button class="link ev-mute is-muted" data-unmute-ev="${e.id}" title="No notifications: ${esc(why.text)}. Tap to turn on again." aria-label="Notifications off. Turn on again">🔕 <span>Muted</span></button>`
+    ? ` <button class="link ev-mute is-muted lvl-${why.level}" data-unmute-ev="${e.id}" title="No notifications: ${esc(why.text)}. Tap to turn on again." aria-label="Notifications off: ${esc(why.text)}. Turn on again">${MUTE_LEVELS[why.level].icon} <span>${MUTE_LEVELS[why.level].label}</span></button>`
     : ` <button class="link ev-mute" data-mute-ev="${e.id}" title="Notifications on. Tap to stop notifications like this…" aria-label="Stop notifications like this">🔔</button>`;
 }
 async function renderNotifPrefs() {
@@ -1428,7 +1441,7 @@ async function renderNotifPrefs() {
         <input type="checkbox" class="switch" data-type="${t.id}" ${t.on ? 'checked' : ''} aria-label="${esc(t.label)}"></label></li>`).join('')}</ul>`).join('')}
     <h3 class="notif-h">Muted with 🔕</h3>
     <div class="muted small">Tap 🔕 on an event to choose what to mute: just that one, that kind on one device, or everything from a device.</div>
-    <ul class="notif-types">${p.muted.map((r, i) => `<li><span>${esc(ruleText(r))}</span><button class="ghost small" data-unmute="${i}">Turn on again</button></li>`).join('')
+    <ul class="notif-types">${p.muted.map((r, i) => `<li><span>${levelBadge(ruleLevel(r))} ${esc(ruleText(r))}</span><button class="ghost small" data-unmute="${i}">Turn on again</button></li>`).join('')
       || '<li class="muted small">None.</li>'}</ul>`;
 }
 $('#notif-prefs').addEventListener('change', async (e) => {
@@ -1463,7 +1476,7 @@ function muteDialog(e) {
   const dlg = document.createElement('dialog');
   dlg.className = 'mute-dlg';
   dlg.innerHTML = `<form method="dialog"><h3>Stop notifications</h3><div class="muted small">${esc(e.title)}</div>
-    ${ch.map((c, i) => `<label class="wiz-opt"><input type="radio" name="lvl" value="${i}" ${i ? '' : 'checked'}><span><b>${esc(c.label)}</b><br><span class="muted small">${esc(c.sub)}</span></span></label>`).join('')}
+    ${ch.map((c, i) => `<label class="wiz-opt"><input type="radio" name="lvl" value="${i}" ${i ? '' : 'checked'}><span>${levelBadge(ruleLevel(c.off ? { off: c.off } : c.rule))} <b>${esc(c.label)}</b><br><span class="muted small">${esc(c.sub)}</span></span></label>`).join('')}
     <div class="muted small">It is still logged under Events. Turn it on again with 🔕 on the event or under Settings → Notifications.</div>
     <div class="row"><button value="ok">Mute</button> <button value="cancel" class="ghost" formnovalidate>Cancel</button></div></form>`;
   document.body.append(dlg);

@@ -392,9 +392,14 @@ body.wizard-open { overflow: hidden; }
 .mute-dlg .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 .ev-mute:not(.is-muted) { opacity: .35; filter: grayscale(1); }
 .ev-mute:not(.is-muted):hover { opacity: 1; filter: none; }
-.ev-mute.is-muted { opacity: 1; display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; border-radius: 999px;
-  border: 1px solid var(--warn, #d9a441); color: var(--warn, #d9a441); background: color-mix(in srgb, var(--warn, #d9a441) 14%, transparent);
-  text-decoration: none; font-weight: 600; }
+/* mute level marks: one colour per level (events list, mute dialog, settings list) */
+.ev-mute.is-muted, .mute-lvl { --lvl: var(--warn); opacity: 1; display: inline-flex; align-items: center; gap: 3px; padding: 0 6px;
+  border-radius: 999px; border: 1px solid var(--lvl); color: var(--lvl); background: color-mix(in srgb, var(--lvl) 14%, transparent);
+  text-decoration: none; font-weight: 600; font-size: 12px; white-space: nowrap; }
+:is(.ev-mute, .mute-lvl).lvl-one { --lvl: var(--warn); }
+:is(.ev-mute, .mute-lvl).lvl-devtype { --lvl: var(--info); }
+:is(.ev-mute, .mute-lvl).lvl-device { --lvl: #a855f7; }
+:is(.ev-mute, .mute-lvl).lvl-type { --lvl: var(--bad); }
 .mod-acts { margin: 8px 0; }
 .mod-act { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
 .mod-act select { max-width: 100%; }
