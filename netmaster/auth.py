@@ -6,6 +6,9 @@
 - Failed logins are rate limited per IP address.
 - The first password can be set from the computer NetMaster runs on, or from anywhere with the
   one-time code in data/setup-code.txt. It can also be set with: python -m netmaster set-password
+- API keys let other programs use the API without the password: "Authorization: Bearer nm_..."
+  or "X-API-Key: nm_...". Only their SHA-256 is stored. A key can only read, or read and control
+  (approve, pause, scan ...). No key can change the password, keys, settings or modules.
 """
 from __future__ import annotations
 
@@ -25,7 +28,19 @@ CREATE TABLE IF NOT EXISTS sessions(
     last_seen REAL NOT NULL,
     agent TEXT
 );
+CREATE TABLE IF NOT EXISTS api_keys(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    key_hash TEXT UNIQUE NOT NULL,
+    hint TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    created REAL NOT NULL,
+    last_used REAL,
+    last_ip TEXT
+);
 """
+KEY_PREFIX = "nm_"
+SCOPES = ("read", "control")
 
 
 def hash_password(pw: str) -> str:
@@ -117,6 +132,38 @@ class Auth:
 
     def end_all(self, keep: str | None = None) -> None:
         self.db.execute("DELETE FROM sessions WHERE token_hash != ?", [(_th(keep or ""),)])
+
+    # ---------- API keys ----------
+    def new_key(self, name: str, scope: str) -> str:
+        name = " ".join(str(name).split())[:60]
+        if not name:
+            raise ValueError("Give the key a name, e.g. the program that will use it")
+        if scope not in SCOPES:
+            raise ValueError("Unknown access level")
+        key = KEY_PREFIX + secrets.token_urlsafe(32)
+        self.db.execute("INSERT INTO api_keys(name, key_hash, hint, scope, created) VALUES (?,?,?,?,?)",
+                        [(name, _th(key), key[:7] + "…" + key[-4:], scope, time.time())])
+        return key
+
+    def keys(self) -> list[dict]:
+        return [dict(r) for r in self.db.query(
+            "SELECT id, name, hint, scope, created, last_used, last_ip FROM api_keys ORDER BY id")]
+
+    def delete_key(self, kid: int) -> None:
+        self.db.execute("DELETE FROM api_keys WHERE id = ?", [(int(kid),)])
+
+    def key_scope(self, key: str | None, ip: str = "") -> str | None:
+        """The access level of an API key, or None if it is not a valid key."""
+        if not key or not key.startswith(KEY_PREFIX) or len(key) > 100:
+            return None
+        h, now = _th(key), time.time()
+        rows = self.db.query("SELECT scope FROM api_keys WHERE key_hash = ?", (h,))
+        if not rows:
+            return None
+        if now - self._touched.get(h, 0) > 60:
+            self._touched[h] = now
+            self.db.execute("UPDATE api_keys SET last_used = ?, last_ip = ? WHERE key_hash = ?", [(now, ip[:64], h)])
+        return rows[0]["scope"]
 
     def prune(self) -> None:
         self.db.execute("DELETE FROM sessions WHERE last_seen < ?", [(time.time() - SESSION_DAYS * 86400,)])

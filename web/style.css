@@ -445,3 +445,9 @@ body.wizard-open { overflow: hidden; }
 /* module graphs (ctx.record) and module info per device (device_info) */
 .mod-chart { margin-top: 8px; min-width: 0; }
 .dev-mods { margin: 8px 0; padding: 6px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+/* API keys */
+.key-list li > button { margin-left: auto; }
+.key-new { margin: 10px 0; padding: 8px 10px; border: 1px solid var(--ok); border-radius: 8px; }
+.key-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; min-width: 0; }
+.key-line code { overflow-wrap: anywhere; word-break: break-all; min-width: 0; flex: 1 1 220px; user-select: all; }
+#key-form input { flex: 1 1 200px; min-width: 0; }

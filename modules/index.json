@@ -95,6 +95,38 @@
       }
     },
     {
+      "id": "prometheus",
+      "name": "Prometheus metrics",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Lets monitoring systems read NetMaster's measurements in the standard Prometheus format: response times, packet loss, services, uptime checks, speed tests and which devices are online. Works with Prometheus, Grafana, Zabbix, Datadog, Elastic, Checkmk and others.",
+      "provides": [
+        "service"
+      ],
+      "requires": [],
+      "sha256": {
+        "module.json": "83bbc9e7e36f833175ecab683a55542ab1f86da003cf0393fde5608788a17497",
+        "module.py": "5036ef357ef45094abf5f412ee0fe14ccd9e49619a3d92456b11b7f3335bfece",
+        "strings.tsv": "ee903e6194396f25eb5a44b31f5f9e4ee1c8aef93c9ebbfe134665e970c6f445"
+      }
+    },
+    {
+      "id": "siem",
+      "name": "SIEM / syslog",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Sends NetMaster's alerts (new devices, attacks, open ports, outages ...) to your log server or SIEM as syslog, CEF or JSON: Microsoft Sentinel, Splunk, Wazuh, Graylog, Elastic, QRadar, ArcSight, rsyslog and others.",
+      "provides": [
+        "service"
+      ],
+      "requires": [],
+      "sha256": {
+        "module.json": "33b1dde4bcc1785b78388e8c25ea8ee96be056af4a1a708f5ee6893e7fbd5c28",
+        "module.py": "144ac6d7f0a9619893d7be6379c4757307aeb28e0d3a8396a3385280b452a508",
+        "strings.tsv": "b7344d075dfe80c0c3dd1f4609862b3207ce148bb24079a3d2e19bab5126fab0"
+      }
+    },
+    {
       "id": "tplink_router",
       "name": "TP-Link router",
       "version": "1.0.0",
@@ -126,6 +158,22 @@
         "module.json": "70253ea102d4f4cdaf284579f0c9e6cef9beec536efd325b3dc0530b83835372",
         "module.py": "40707860afb4ec6eca08bfc13048a1d945ebd179c71b63bf389ed49b1e838bb1",
         "strings.tsv": "6c756931ac8cb20e884866586019941bc7a05d07f0c0c34915e80b954931c9ba"
+      }
+    },
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "version": "1.0.0",
+      "author": "NetMaster",
+      "description": "Sends NetMaster's alerts to another system as they happen: ticket and on-call systems (ServiceNow, PagerDuty, Opsgenie, Jira), automation (n8n, Power Automate, Zapier, Home Assistant) or chat (Microsoft Teams, Slack, Discord).",
+      "provides": [
+        "service"
+      ],
+      "requires": [],
+      "sha256": {
+        "module.json": "4a365761c291d1bb6051dbc55642d66233344ff5e0be76bfdf116642825ed89f",
+        "module.py": "bb512411f64eb93c56c66641206f08c0e1588c5e42db2a06624011ac3e71b315",
+        "strings.tsv": "dd99780a4ccc2a5977332a7f40d4a804ed0df719fd84c0ad783fa0460f10f7bc"
       }
     }
   ]

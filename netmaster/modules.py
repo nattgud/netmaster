@@ -30,7 +30,7 @@ STATE_FILE = DATA_DIR / "modules.json"
 SECRETS_FILE = DATA_DIR / "secrets.json"
 ID_RX = re.compile(r"^[a-z0-9_]{1,40}$")
 FILE_RX = re.compile(r"^[A-Za-z0-9_\-]+(\.[A-Za-z0-9]+)?$")
-TYPES = ("text", "password", "number", "bool")
+TYPES = ("text", "password", "number", "bool", "select")
 LANG_RX = re.compile(r"^[a-z]{2}$")
 METRICS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS module_metrics(
@@ -90,6 +90,12 @@ def validate_meta(meta: dict) -> dict:
     for s in meta["settings"]:
         if not s.get("key") or s.get("type", "text") not in TYPES:
             raise ValueError(f"Invalid setting in module.json: {s}")
+        if s.get("type") == "select":
+            # a list of choices: ["a", "b"] or [{"value": "a", "label": "Shown"}]
+            opts = [o if isinstance(o, dict) else {"value": o, "label": str(o)} for o in s.get("options") or []]
+            if not opts or any("value" not in o for o in opts):
+                raise ValueError(f"A select setting needs options: {s['key']}")
+            s["options"] = [{"value": str(o["value"]), "label": str(o.get("label", o["value"]))} for o in opts]
     for a in meta["actions"]:
         if not isinstance(a, dict) or not ID_RX.match(str(a.get("id", ""))) or not a.get("label"):
             raise ValueError(f"Invalid action in module.json: {a}")
@@ -113,6 +119,7 @@ class ModuleManager:
         self.usage = self.wifi = None       # insights.Usage / WifiWatch, set by app
         self.pause_fn = None                # async (mac, paused, via) -> bool, set by app
         self.protected_fn = lambda: {}      # {mac: reason} for devices that must never be paused, set by app
+        self.status_fn = lambda: {}         # the same status the web page gets, set by app
         self.instances: dict[str, ModuleBase] = {}
         self.tasks: dict[str, asyncio.Task] = {}
         self.load_errors: dict[str, str] = {}
@@ -644,6 +651,8 @@ class ModuleManager:
                 v = bool(v) if t == "bool" else float(v) if t == "number" else str(v).strip()
             except (TypeError, ValueError):
                 raise ValueError(f"Invalid value for {s.get('label', s['key'])}") from None
+            if t == "select" and v not in {o["value"] for o in s["options"]}:
+                raise ValueError(f"Invalid value for {s.get('label', s['key'])}")
             entry["settings"][s["key"]] = v
         if enabled is not None:
             entry["enabled"] = bool(enabled)

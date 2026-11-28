@@ -1,0 +1,35 @@
+{
+  "id": "webhook",
+  "name": "Webhook",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Sends NetMaster's alerts to another system as they happen: ticket and on-call systems (ServiceNow, PagerDuty, Opsgenie, Jira), automation (n8n, Power Automate, Zapier, Home Assistant) or chat (Microsoft Teams, Slack, Discord).",
+  "provides": ["service"],
+  "requires": [],
+  "files": ["module.py", "strings.tsv"],
+  "settings": [
+    {"key": "url", "label": "Webhook address", "type": "text", "default": "", "help": "The address the other system gave you, starting with https://. In Teams: the channel's ⋯ → Workflows → \"Post to a channel when a webhook request is received\"."},
+    {"key": "format", "label": "Format", "type": "select", "default": "json", "options": [
+      {"value": "json", "label": "NetMaster JSON (ticket systems, n8n, Power Automate ...)"},
+      {"value": "teams", "label": "Microsoft Teams (Workflows)"},
+      {"value": "slack", "label": "Slack"},
+      {"value": "discord", "label": "Discord"}
+    ]},
+    {"key": "min_severity", "label": "Send alerts from this level", "type": "select", "default": "warning", "options": [
+      {"value": "info", "label": "Everything (info and up)"},
+      {"value": "notice", "label": "Notice and up"},
+      {"value": "warning", "label": "Warning and up"},
+      {"value": "critical", "label": "Only critical"}
+    ]},
+    {"key": "send_security", "label": "Security (new devices, attacks, open ports ...)", "type": "bool", "default": true},
+    {"key": "send_disruption", "label": "Disruptions (internet, router, services ...)", "type": "bool", "default": true},
+    {"key": "send_presence", "label": "Devices coming and going", "type": "bool", "default": false},
+    {"key": "send_system", "label": "NetMaster itself (updates, modules ...)", "type": "bool", "default": true},
+    {"key": "auth_header", "label": "Authorization header (optional)", "type": "password", "default": "", "help": "Sent as is, e.g. \"Bearer abc123\" or \"Basic ...\", for receivers that need a login."},
+    {"key": "secret", "label": "Signing secret (optional)", "type": "password", "default": "", "help": "If set, each request gets the header X-NetMaster-Signature: sha256=<HMAC of the body>, so the receiver can check that it came from NetMaster."},
+    {"key": "verify_tls", "label": "Check the receiver's certificate", "type": "bool", "default": true, "help": "Turn off only for a receiver in your own network with a self-signed certificate."}
+  ],
+  "actions": [
+    {"id": "test", "label": "Send a test", "help": "Sends a test message with the current settings. Save first."}
+  ]
+}

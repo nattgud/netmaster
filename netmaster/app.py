@@ -11,6 +11,7 @@ from fastapi import Body, FastAPI, HTTPException, Query, Request, WebSocket, Web
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .auth import KEY_PREFIX
 from .config import WEB_DIR, load_config
 from .db import Database
 from .guards import DhcpGuard, DnsGuard, PassiveSniffer
@@ -88,6 +89,7 @@ async def lifespan(app: FastAPI):
     from .insights import Exposure, PortScanner, Services, SpeedTest, Usage, WifiWatch
     s.modules.pause_fn = lambda mac, on, via: set_paused(s, mac, on, via)
     s.modules.protected_fn = lambda: _protected(s)
+    s.modules.status_fn = lambda: _status(app)
     s.usage = s.modules.usage = Usage(db, events, inventory)
     s.wifi = s.modules.wifi = WifiWatch(db, events, inventory)
     s.calls = CallQuality(net, events, s.modules.load_mbps, db)
@@ -157,7 +159,11 @@ async def _status_loop(app: FastAPI) -> None:
         app.state.hub.publish("status", _status(app))
 
 
-app = FastAPI(title="NetMaster", version=__version__, lifespan=lifespan)
+app = FastAPI(title="NetMaster", version=__version__, lifespan=lifespan,
+              # API reference for other programs, behind the login: /api/docs (and /api/openapi.json)
+              docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json",
+              description="Use an API key from Settings → API keys: `Authorization: Bearer nm_...` "
+                          "or `X-API-Key: nm_...`. Live updates: the WebSocket /ws sends the same status and events.")
 
 
 @app.get("/api/status")
@@ -693,7 +699,9 @@ async def module_configure(request: Request, mid: str, body: dict = Body(...)):
 # --- login ---
 def _token(request) -> str | None:
     h = request.headers.get("authorization", "")
-    return h[7:].strip() if h.lower().startswith("bearer ") else request.cookies.get("nm_session")
+    if h.lower().startswith("bearer "):
+        return h[7:].strip()
+    return request.headers.get("x-api-key", "").strip() or request.cookies.get("nm_session")
 
 
 def _is_local(request: Request) -> bool:
@@ -797,7 +805,8 @@ def auth_logout_all(request: Request):
 
 @app.websocket("/ws")
 async def ws(websocket: WebSocket):
-    if not websocket.app.state.auth.valid(_token(websocket)):
+    a, token = websocket.app.state.auth, _token(websocket)
+    if not (a.valid(token) or a.key_scope(token, websocket.client.host if websocket.client else "")):
         await websocket.close(code=4401)
         return
     await websocket.accept()
@@ -826,9 +835,56 @@ async def require_login(request: Request, call_next):
                 from urllib.parse import urlparse
                 if urlparse(origin).netloc != request.headers.get("host"):
                     return JSONResponse({"detail": "Cross-site request refused"}, status_code=403)
-        if not request.app.state.auth.valid(_token(request)):
+        a, token = request.app.state.auth, _token(request)
+        if token and token.startswith(KEY_PREFIX):
+            ip = request.client.host if request.client else "?"
+            if a.limited(ip):
+                return JSONResponse({"detail": "Too many failed attempts. Wait 15 minutes."}, status_code=429)
+            scope = a.key_scope(token, ip)
+            if not scope:
+                a.failed(ip)
+                return JSONResponse({"detail": "Unknown API key"}, status_code=401)
+            refused = _key_refused(request.method, path, scope)
+            if refused:
+                return JSONResponse({"detail": refused}, status_code=403)
+        elif not a.valid(token):
             return JSONResponse({"detail": "Not logged in"}, status_code=401)
     return await call_next(request)
+
+
+# What an API key may never do: only someone logged in with the password manages access and code.
+KEY_ADMIN = ("/api/keys", "/api/settings", "/api/restart", "/api/setup/", "/api/update", "/api/push/")
+
+
+def _key_refused(method: str, path: str, scope: str) -> str | None:
+    write = method not in ("GET", "HEAD", "OPTIONS")
+    if path.startswith("/api/keys") or (write and (path.startswith(KEY_ADMIN) or (
+            path.startswith("/api/modules/") and "/action/" not in path))):
+        return "API keys cannot change settings, modules or access. Log in with the password for that."
+    if write and scope != "control":
+        return "This API key can only read"
+    return None
+
+
+# --- API keys (Settings → API keys) ---
+@app.get("/api/keys")
+def api_keys(request: Request):
+    return {"keys": request.app.state.auth.keys()}
+
+
+@app.post("/api/keys")
+def api_key_new(request: Request, body: dict = Body(...)):
+    try:
+        key = request.app.state.auth.new_key(body.get("name", ""), body.get("scope", "read"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"key": key}
+
+
+@app.delete("/api/keys/{kid}")
+def api_key_delete(request: Request, kid: int):
+    request.app.state.auth.delete_key(kid)
+    return {"ok": True}
 
 
 @app.middleware("http")

@@ -536,3 +536,23 @@ A device or port you watch (Watch in the device list) stops answering, or answer
 🔔 Notifying when it comes/goes · turn off	🔔 Meddelar när den kommer/går · stäng av	🔔 上线/离线时通知 · 关闭	🔔 आने/जाने पर सूचना · बंद करें	🔔 Avisando al conectar/desconectar · desactivar	🔔 يُبلغ عند الاتصال/الانقطاع · إيقاف	🔔 Prévient à la connexion/déconnexion · désactiver
 Wi-Fi: no data yet	Wi-Fi: inga data än	Wi-Fi：暂无数据	Wi-Fi: अभी कोई डेटा नहीं	Wi-Fi: aún no hay datos	Wi-Fi: لا توجد بيانات بعد	Wi-Fi : pas encore de données
 devices are not approved.	enheter är inte godkända.	台设备未获批准。	डिवाइस स्वीकृत नहीं हैं।	dispositivos no están aprobados.	أجهزة غير معتمدة.	appareils ne sont pas approuvés.
+API keys	API-nycklar	API 密钥	API कुंजियाँ	Claves de API	مفاتيح API	Clés d'API
+let other programs read NetMaster	låt andra program läsa NetMaster	让其他程序读取 NetMaster	अन्य प्रोग्राम को NetMaster पढ़ने दें	deja que otros programas lean NetMaster	اسمح لبرامج أخرى بقراءة NetMaster	laisser d'autres programmes lire NetMaster
+Read only	Bara läsa	只读	केवल पढ़ना	Solo lectura	قراءة فقط	Lecture seule
+Read and control	Läsa och styra	读取和控制	पढ़ना और नियंत्रण	Leer y controlar	قراءة وتحكم	Lire et contrôler
+Copy the key now.	Kopiera nyckeln nu.	请立即复制密钥。	अभी कुंजी कॉपी करें।	Copia la clave ahora.	انسخ المفتاح الآن.	Copiez la clé maintenant.
+It is not shown again.	Den visas inte igen.	它不会再次显示。	यह दोबारा नहीं दिखेगी।	No se volverá a mostrar.	لن يظهر مرة أخرى.	Elle ne sera plus affichée.
+Copy	Kopiera	复制	कॉपी करें	Copiar	نسخ	Copier
+Copied	Kopierad	已复制	कॉपी हो गई	Copiada	تم النسخ	Copiée
+Delete	Ta bort	删除	हटाएँ	Eliminar	حذف	Supprimer
+Delete the API key?	Ta bort API-nyckeln?	删除此 API 密钥？	API कुंजी हटाएँ?	¿Eliminar la clave de API?	حذف مفتاح API؟	Supprimer la clé d'API ?
+Other programs send the key in the header Authorization: Bearer (or X-API-Key). A key can never change the password, keys, settings or modules.	Andra program skickar nyckeln i headern Authorization: Bearer (eller X-API-Key). En nyckel kan aldrig ändra lösenord, nycklar, inställningar eller moduler.	其他程序在请求头 Authorization: Bearer（或 X-API-Key）中发送密钥。密钥永远无法更改密码、密钥、设置或模块。	अन्य प्रोग्राम कुंजी को हेडर Authorization: Bearer (या X-API-Key) में भेजते हैं। कुंजी कभी पासवर्ड, कुंजियाँ, सेटिंग्स या मॉड्यूल नहीं बदल सकती।	Otros programas envían la clave en la cabecera Authorization: Bearer (o X-API-Key). Una clave nunca puede cambiar la contraseña, las claves, los ajustes ni los módulos.	ترسل البرامج الأخرى المفتاح في الترويسة Authorization: Bearer (أو X-API-Key). لا يمكن للمفتاح أبداً تغيير كلمة المرور أو المفاتيح أو الإعدادات أو الوحدات.	Les autres programmes envoient la clé dans l'en-tête Authorization: Bearer (ou X-API-Key). Une clé ne peut jamais modifier le mot de passe, les clés, les réglages ni les modules.
+API reference	API-referens	API 参考	API संदर्भ	Referencia de la API	مرجع API	Référence de l'API
+used {0} ago	använd för {0} sedan	{0}前使用过	{0} पहले उपयोग हुई	usada hace {0}	استُخدم قبل {0}	utilisée il y a {0}
+never used	aldrig använd	从未使用	कभी उपयोग नहीं हुई	nunca usada	لم يُستخدم قط	jamais utilisée
+No API keys yet.	Inga API-nycklar än.	还没有 API 密钥。	अभी कोई API कुंजी नहीं।	Aún no hay claves de API.	لا توجد مفاتيح API بعد.	Aucune clé d'API pour l'instant.
+Name, e.g. Grafana or ServiceNow	Namn, t.ex. Grafana eller ServiceNow	名称，例如 Grafana 或 ServiceNow	नाम, जैसे Grafana या ServiceNow	Nombre, p. ej. Grafana o ServiceNow	الاسم، مثل Grafana أو ServiceNow	Nom, p. ex. Grafana ou ServiceNow
+Create key	Skapa nyckel	创建密钥	कुंजी बनाएँ	Crear clave	إنشاء مفتاح	Créer une clé
+Read and control: may also approve, pause and scan devices and press module buttons.	Läsa och styra: får också godkänna, pausa och skanna enheter och trycka på modulknappar.	读取和控制：还可以批准、暂停和扫描设备，并按下模块按钮。	पढ़ना और नियंत्रण: डिवाइस स्वीकृत, रोक और स्कैन भी कर सकती है और मॉड्यूल बटन दबा सकती है।	Leer y controlar: también puede aprobar, pausar y escanear dispositivos y pulsar botones de módulos.	قراءة وتحكم: يمكنه أيضاً اعتماد الأجهزة وإيقافها مؤقتاً وفحصها والضغط على أزرار الوحدات.	Lire et contrôler : peut aussi approuver, mettre en pause et analyser des appareils et utiliser les boutons des modules.
+Give the key a name, e.g. the program that will use it	Ge nyckeln ett namn, t.ex. programmet som ska använda den	为密钥命名，例如将使用它的程序	कुंजी को नाम दें, जैसे वह प्रोग्राम जो इसे उपयोग करेगा	Pon un nombre a la clave, p. ej. el programa que la usará	أعطِ المفتاح اسماً، مثل البرنامج الذي سيستخدمه	Donnez un nom à la clé, p. ex. le programme qui l'utilisera
+(saved, leave empty to keep)	(sparat, lämna tomt för att behålla)	（已保存，留空则保留）	(सहेजा गया, रखने के लिए खाली छोड़ें)	(guardado, déjalo vacío para conservarlo)	(محفوظ، اتركه فارغاً للإبقاء عليه)	(enregistré, laissez vide pour le conserver)

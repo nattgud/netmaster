@@ -101,6 +101,11 @@ On the phone, choose **Add to Home Screen** (on iPhone this is needed for notifi
 
 Modules read logs straight from supported routers. Any router that can send syslog can also send its log to the NetMaster computer, UDP port 5140 by default (Settings → General → Server). Give the NetMaster computer a fixed address (DHCP reservation) in your router first. Everything that comes in shows on the **Logs** tab. The rules in `netmaster/rules.py` turn known lines into events.
 
+## Connecting other systems
+
+- **REST API:** create a key under Settings → API keys and send it as `Authorization: Bearer nm_...` (or `X-API-Key`). A key can read only, or read and control (approve, pause, scan). No key can change the password, keys, settings or modules. The reference is at `/api/docs` (log in first) and `/api/openapi.json`.
+- **Modules** (Settings → Modules): *Webhook* sends alerts to ServiceNow, PagerDuty, Teams, Slack, n8n and the like. *Prometheus metrics* lets Prometheus, Grafana, Zabbix and Datadog read the measurements. *SIEM / syslog* sends alerts as syslog, CEF or JSON to Sentinel, Splunk, Wazuh, Graylog or Elastic. *Home Assistant (MQTT)* shares devices and alerts with Home Assistant.
+
 ## Data and privacy
 
 Everything stays on your computer, in `data/`: the SQLite database (`netmaster.db`), settings (`settings.json`), module settings (`modules.json`), module passwords (`secrets.json`), installed modules (`modules/`) and the push key (`vapid_private.pem`). Outside requests: the vendor list (wireshark.org, monthly), IP locations (ip-api.com), exposure lookups (Shodan InternetDB), speed tests (Cloudflare), and module downloads from the module source.

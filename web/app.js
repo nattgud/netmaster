@@ -1314,6 +1314,7 @@ function renderSettings() {
   renderModules();
   renderConfig();
   renderAccount();
+  renderApiKeys();
 }
 
 // ---------- modules ----------
@@ -1322,6 +1323,8 @@ function modSettingInput(m, s) {
   let input;
   if (s.type === 'bool') input = `<input type="checkbox" class="switch" id="${id}" data-key="${esc(s.key)}" ${s.value ? 'checked' : ''}>`;
   else if (s.type === 'password') input = `<input type="password" id="${id}" data-key="${esc(s.key)}" autocomplete="new-password" placeholder="${s.is_set ? '•••••• (saved, leave empty to keep)' : ''}">`;
+  else if (s.type === 'select') input = `<select id="${id}" data-key="${esc(s.key)}">${(s.options || []).map((o) =>
+    `<option value="${esc(o.value)}"${String(s.value) === o.value ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
   else input = `<input type="${s.type === 'number' ? 'number' : 'text'}" id="${id}" data-key="${esc(s.key)}" value="${esc(s.value ?? '')}">`;
   return `<div class="cfg-row"><label for="${id}">${esc(s.label || s.key)}</label>${input}${help}</div>`;
 }
@@ -1880,6 +1883,52 @@ async function renderAccount() {
     <div class="cfg-actions"><button class="ghost" id="logout">Log out</button><button class="ghost" id="logout-all">Log out all other devices</button></div>
     <label class="cfg-row"><span>Language</span>${window.i18n?.picker() || ''}</label>`;
 }
+// ---------- API keys: other programs (monitoring, ticket systems, scripts) use the REST API ----------
+const KEY_SCOPE = { read: 'Read only', control: 'Read and control' };
+async function renderApiKeys(newKey) {
+  const el = $('#apikeys-panel');
+  if (!el) return;
+  let keys = [];
+  try { keys = (await api('/api/keys')).keys; } catch { /* not logged in yet */ }
+  // a new key is shown once, keep it on screen across redraws until the user closes it
+  if (newKey !== undefined) state.newApiKey = newKey;
+  const fresh = state.newApiKey ? `<div class="key-new">
+      <div class="small"><b>Copy the key now.</b> <span>It is not shown again.</span></div>
+      <div class="key-line"><code id="key-value">${esc(state.newApiKey)}</code><button type="button" class="small" id="key-copy">Copy</button><button type="button" class="ghost small" id="key-hide">Done</button></div></div>` : '';
+  el.innerHTML = `<div class="muted small"><span>Other programs send the key in the header Authorization: Bearer (or X-API-Key). A key can never change the password, keys, settings or modules.</span>
+      <a href="api/docs" target="_blank" rel="noopener">API reference</a></div>
+    ${fresh}
+    ${keys.length ? `<ul class="mod-rows key-list">${keys.map((k) => `<li>
+      <span class="mono">${esc(k.name)}</span><span class="muted"><span>${esc(KEY_SCOPE[k.scope] || k.scope)}</span> · <code>${esc(k.hint)}</code> · <span>${
+        k.last_used ? `used ${fmtAgo(k.last_used)} ago` : 'never used'}</span>${k.last_ip ? ` · ${esc(k.last_ip)}` : ''}</span>
+      <button type="button" class="ghost small" data-key-del="${k.id}" data-key-name="${esc(k.name)}">Delete</button></li>`).join('')}</ul>`
+    : '<div class="muted small">No API keys yet.</div>'}
+    <form id="key-form" class="cfg-actions">
+      <input id="key-name" placeholder="Name, e.g. Grafana or ServiceNow" maxlength="60" required>
+      <select id="key-scope"><option value="read">${KEY_SCOPE.read}</option><option value="control">${KEY_SCOPE.control}</option></select>
+      <button type="submit">Create key</button><span id="key-msg" class="small danger-text"></span></form>
+    <div class="muted small">Read and control: may also approve, pause and scan devices and press module buttons.</div>`;
+}
+document.addEventListener('submit', async (e) => {
+  if (e.target.id !== 'key-form') return;
+  e.preventDefault();
+  try {
+    const r = await api('/api/keys', 'POST', { name: $('#key-name').value, scope: $('#key-scope').value });
+    renderApiKeys(r.key);
+  } catch (err) { $('#key-msg').textContent = err.message; }
+});
+document.addEventListener('click', async (e) => {
+  if (e.target.id === 'key-copy') {
+    try { await navigator.clipboard.writeText(state.newApiKey); e.target.textContent = window.i18n?.t('Copied') || 'Copied'; }
+    catch { getSelection().selectAllChildren($('#key-value')); }
+  }
+  if (e.target.id === 'key-hide') renderApiKeys(null);
+  const del = e.target.closest('[data-key-del]');
+  if (del && confirm(`${window.i18n?.t('Delete the API key?') || 'Delete the API key?'} ${del.dataset.keyName}`)) {
+    try { await api(`/api/keys/${del.dataset.keyDel}`, 'DELETE'); } catch (err) { alert(err.message); }
+    renderApiKeys();
+  }
+});
 document.addEventListener('submit', async (e) => {
   if (e.target.id !== 'pw-form') return;
   e.preventDefault();

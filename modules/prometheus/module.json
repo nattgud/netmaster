@@ -1,0 +1,19 @@
+{
+  "id": "prometheus",
+  "name": "Prometheus metrics",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Lets monitoring systems read NetMaster's measurements in the standard Prometheus format: response times, packet loss, services, uptime checks, speed tests and which devices are online. Works with Prometheus, Grafana, Zabbix, Datadog, Elastic, Checkmk and others.",
+  "provides": ["service"],
+  "requires": [],
+  "files": ["module.py", "strings.tsv"],
+  "settings": [
+    {"key": "port", "label": "Port", "type": "number", "default": 9877, "help": "The measurements are at http://<this computer>:<port>/metrics."},
+    {"key": "listen", "label": "Who may read", "type": "select", "default": "0.0.0.0", "options": [
+      {"value": "0.0.0.0", "label": "Other computers in the network"},
+      {"value": "127.0.0.1", "label": "Only this computer"}
+    ]},
+    {"key": "token", "label": "Token (recommended)", "type": "password", "default": "", "help": "If set, the reader must send \"Authorization: Bearer <token>\". In Prometheus: authorization: {credentials: <token>}."},
+    {"key": "per_device", "label": "Include every device", "type": "bool", "default": true, "help": "Online state, name, IP and live traffic per device. Turn off for fewer measurements."}
+  ]
+}

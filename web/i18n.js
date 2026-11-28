@@ -30,8 +30,9 @@
     if (!t) return null;
     let hit = dict.get(t);
     if (hit) return text.replace(t, hit);
-    const m = /^([\d.,\s%+\-–<>~✓✗!·•]+?)\s*(\S.*?)(:?)$/.exec(t) || /^()(.+?)(:)$/.exec(t);
-    if (m && (hit = dict.get(m[2]))) return text.replace(t, `${m[1] ? m[1] + ' ' : ''}${hit}${m[3]}`);
+    // a leading number such as "18 sent" or "12 Mbit/s down" (greedy, so all digits stay in the number)
+    const m = /^([\d.,\s%+\-–<>~✓✗!·•]+)(\S.*?)(:?)$/.exec(t) || /^()(.+?)(:)$/.exec(t);
+    if (m && (hit = dict.get(m[2]))) return text.replace(t, `${m[1].trim() ? m[1].trim() + ' ' : ''}${hit}${m[3]}`);
     for (const [re, out] of patterns) {
       const p = re.exec(t);
       if (p) return text.replace(t, out.replace(/\{(\d)\}/g, (_, i) => (tr(p[+i + 1]) || p[+i + 1]).trim()));

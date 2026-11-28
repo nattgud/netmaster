@@ -37,7 +37,7 @@ modules/my_router/
 - `provides`: what the module adds. `logs`, `router`, `dns`, `service` or `smart_home` (see below).
 - `requires`: pip packages, installed into NetMaster's Python environment when the module is installed.
 - `files`: the files to download. `module.py` must define a class called `Module`.
-- `settings`: the form the user fills in. Types: `text`, `password`, `number`, `bool`. Passwords are stored apart from other settings and never sent back to the browser.
+- `settings`: the form the user fills in. Types: `text`, `password`, `number`, `bool`, `select` (0.2.8+). Passwords are stored apart from other settings and never sent back to the browser.
 
 ### module.py
 
@@ -112,6 +112,8 @@ A module never needs changes to NetMaster itself. On top of the above:
 - **Graphs.** `self.ctx.record(key, value, label="", unit="")` stores a number (at most once a minute per key, kept 30 days). The module's card then shows a graph with the last 24 hours.
 - **Info on a device.** Override `device_info(self, mac, ip)` and return `[{"label": ..., "value": ..., "state": ...}]` (or `None`). The rows show in that device's details. See [`ups`](ups/module.py).
 - **Web APIs.** `HttpSession(base_url, verify_tls=False, auth=(user, pw), headers={...})` keeps cookies between calls, and `s.get(path)`, `s.post(path, json=...)`, `put`, `delete` return a response with `status`, `ok`, `text`, `json()` and `check()` (raises on 4xx/5xx). `http_request(method, url, ...)` does a single call. Both are blocking: run them with `ctx.to_thread`.
+- **Choice lists (NetMaster 0.2.8+).** A setting of type `select` with `"options": [{"value": "udp", "label": "UDP"}, ...]` (or just `["udp", "tcp"]`) shows a drop-down list.
+- **Everything the overview shows (NetMaster 0.2.8+).** `self.ctx.status()` returns the same dict as `GET /api/status`: targets with response times and loss, services, uptime checks, the last speed test and more. See [`prometheus`](prometheus/module.py).
 - **Several routers.** Any number of `router` modules can run at once. Their client lists are merged, the blocked lists are combined, and "pause internet" goes to the router that can do it.
 
 ## Publishing

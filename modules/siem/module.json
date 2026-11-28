@@ -1,0 +1,34 @@
+{
+  "id": "siem",
+  "name": "SIEM / syslog",
+  "version": "1.0.0",
+  "author": "NetMaster",
+  "description": "Sends NetMaster's alerts (new devices, attacks, open ports, outages ...) to your log server or SIEM as syslog, CEF or JSON: Microsoft Sentinel, Splunk, Wazuh, Graylog, Elastic, QRadar, ArcSight, rsyslog and others.",
+  "provides": ["service"],
+  "requires": [],
+  "files": ["module.py", "strings.tsv"],
+  "settings": [
+    {"key": "host", "label": "Log server address", "type": "text", "default": "", "help": "The IP or name of the log server or the SIEM's collector."},
+    {"key": "port", "label": "Port", "type": "number", "default": 514, "help": "Usually 514 for UDP and TCP, 6514 for TLS."},
+    {"key": "protocol", "label": "Protocol", "type": "select", "default": "udp", "options": [
+      {"value": "udp", "label": "UDP"},
+      {"value": "tcp", "label": "TCP"},
+      {"value": "tls", "label": "TCP with TLS (encrypted)"}
+    ]},
+    {"key": "format", "label": "Format", "type": "select", "default": "rfc5424", "options": [
+      {"value": "rfc5424", "label": "Syslog RFC 5424 (rsyslog, Graylog, Splunk, Wazuh ...)"},
+      {"value": "cef", "label": "CEF (Microsoft Sentinel, ArcSight, QRadar ...)"},
+      {"value": "json", "label": "JSON in syslog (Elastic, Graylog, Wazuh ...)"}
+    ]},
+    {"key": "min_severity", "label": "Send alerts from this level", "type": "select", "default": "info", "options": [
+      {"value": "info", "label": "Everything (info and up)"},
+      {"value": "notice", "label": "Notice and up"},
+      {"value": "warning", "label": "Warning and up"},
+      {"value": "critical", "label": "Only critical"}
+    ]},
+    {"key": "verify_tls", "label": "Check the server's certificate (TLS)", "type": "bool", "default": true, "help": "Turn off only for a log server in your own network with a self-signed certificate."}
+  ],
+  "actions": [
+    {"id": "test", "label": "Send a test", "help": "Sends a test message with the current settings. Save first."}
+  ]
+}

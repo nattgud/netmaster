@@ -41,7 +41,8 @@ the one with block() is used for pausing.
 
 Helpers: HttpSession / http_request (JSON, forms, Basic auth, cookies, self-signed certificates),
 http_get, ServiceWatch. ctx.record(key, value, label, unit) keeps history and draws a graph in the card.
-device_info(mac, ip) adds lines to a device's details in the device list.
+device_info(mac, ip) adds lines to a device's details in the device list. ctx.status() returns what
+GET /api/status does. A setting of type "select" with "options" shows a drop-down list.
 
 module.json may also declare
     "notifications": [{"id": "on_battery", "group": "Power", "label": "UPS on battery",
@@ -100,6 +101,11 @@ class Context:
     def devices(self) -> dict[str, dict]:
         """Known devices by MAC address: {"ip", "name", "hostname", "vendor", ...}."""
         return self._m.inventory.devices
+
+    def status(self) -> dict:
+        """Everything the overview shows, as GET /api/status returns it: "targets" (internet, router ...
+        with state, median_ms, loss_pct), "uplink", "services", "checks", "speedtest", "router" and more."""
+        return self._m.status_fn()
 
     def device_by_ip(self, ip: str) -> tuple[str, str]:
         """(MAC, display name) for an IP address, or (ip, ip) when unknown."""
